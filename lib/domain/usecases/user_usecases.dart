@@ -35,17 +35,6 @@ class Logout {
   }
 }
 
-/// Cas d'utilisation pour mettre à jour le profil utilisateur
-class UpdateProfile {
-  final UserRepository _repository;
-
-  UpdateProfile({required UserRepository repository}) : _repository = repository;
-
-  Future<Either<Failure, User>> call(User user) async {
-    return await _repository.updateProfile(user);
-  }
-}
-
 /// Cas d'utilisation pour sauvegarder les données utilisateur en local
 class SaveUserLocally {
   final UserRepository _repository;

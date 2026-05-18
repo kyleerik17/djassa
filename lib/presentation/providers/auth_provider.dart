@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../domain/entities/user.dart';
 import '../../../domain/usecases/user_usecases.dart';
 import '../../core_providers.dart';
+import '../../../domain/repositories/user_repository.dart';
 
 /// État de l'authentification
 enum AuthStatus { initial, loading, authenticated, unauthenticated, error }
@@ -63,6 +64,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
   final SaveUserLocally _saveUserLocally;
   final GetUserLocally _getUserLocally;
   final ClearUserLocally _clearUserLocally;
+  final UserRepository _userRepository;
 
   AuthNotifier({
     required IsLoggedIn isLoggedIn,
@@ -71,12 +73,14 @@ class AuthNotifier extends StateNotifier<AuthState> {
     required SaveUserLocally saveUserLocally,
     required GetUserLocally getUserLocally,
     required ClearUserLocally clearUserLocally,
+    required UserRepository userRepository,
   })  : _isLoggedIn = isLoggedIn,
         _getCurrentUser = getCurrentUser,
         _logout = logout,
         _saveUserLocally = saveUserLocally,
         _getUserLocally = getUserLocally,
         _clearUserLocally = clearUserLocally,
+        _userRepository = userRepository,
         super(const AuthState());
 
   /// Vérifie l'état d'authentification au démarrage

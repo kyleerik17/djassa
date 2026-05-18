@@ -5,6 +5,7 @@ import '../../../core/theme/djassa_theme.dart';
 import '../../providers/auth_provider.dart';
 import '../../widgets/buttons/djassa_button.dart';
 import '../../../domain/entities/user.dart';
+import '../../../domain/repositories/user_repository.dart';
 
 /// Écran de connexion Djassa
 class LoginScreen extends ConsumerStatefulWidget {
@@ -31,9 +32,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     if (!_formKey.currentState!.validate()) return;
 
     final authNotifier = ref.read(authNotifierProvider.notifier);
+    final userRepository = ref.read(userRepositoryProvider);
     
     // Appel API de connexion via le repository
-    final result = await ref.read(userRepositoryProvider).login(
+    final result = await userRepository.login(
       phone: _phoneController.text,
       password: _passwordController.text,
     );
