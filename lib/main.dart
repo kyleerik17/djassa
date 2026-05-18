@@ -1,23 +1,52 @@
 import 'package:flutter/material.dart';
-import 'package:Bolide/screens/src/features/Pages/splash_screen/pages/splash_screen_page.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:sizer/sizer.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'core/theme/djassa_theme.dart';
+import 'core/router/app_router.dart';
+import 'presentation/providers/core_providers.dart';
+import 'presentation/providers/auth_provider.dart';
 
-void main() {
-  runApp(const MyApp());
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  
+  // Initialiser SharedPreferences
+  final sharedPreferences = await SharedPreferences.getInstance();
+  
+  // Configuration de la barre d'état
+  SystemChrome.setSystemUIOverlayStyle(SystemUiOverlayStyle.light);
+  
+  runApp(
+    ProviderScope(
+      overrides: [
+        sharedPreferencesProvider.overrideWithValue(sharedPreferences),
+      ],
+      child: const DjassaApp(),
+    ),
+  );
 }
 
-class MyApp extends StatelessWidget {
-  const MyApp({Key? key}) : super(key: key);
+/// Application principale Djassa
+class DjassaApp extends ConsumerWidget {
+  const DjassaApp({super.key});
+
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    // Vérifier l'état d'authentification au démarrage
+    Future.microtask(() {
+      ref.read(authNotifierProvider.notifier).checkAuthStatus();
+    });
+
     return Sizer(
       builder: (context, orientation, deviceType) {
-        return const MaterialApp(
+        return MaterialApp.router(
+          title: 'Djassa',
           debugShowCheckedModeBanner: false,
-          home: SplashScreenPage(
-            partId: 0,
-            userId: 0,
-          ),
+          theme: DjassaTheme.lightTheme,
+          darkTheme: DjassaTheme.darkTheme,
+          themeMode: ThemeMode.light, // Mode clair par défaut
+          routerConfig: AppRouter.router,
         );
       },
     );
