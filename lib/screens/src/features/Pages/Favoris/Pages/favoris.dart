@@ -1,1 +1,0 @@
-export './favoris_page.dart';
