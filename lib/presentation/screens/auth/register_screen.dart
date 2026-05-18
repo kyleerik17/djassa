@@ -5,6 +5,8 @@ import '../../../core/theme/djassa_theme.dart';
 import '../../providers/auth_provider.dart';
 import '../../widgets/buttons/djassa_button.dart';
 import '../../widgets/inputs/djassa_text_field.dart';
+import '../../../domain/entities/user.dart';
+import '../../../domain/repositories/user_repository.dart';
 
 /// Écran d'inscription Djassa
 class RegisterScreen extends ConsumerStatefulWidget {
@@ -52,23 +54,48 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
     }
 
     final authNotifier = ref.read(authNotifierProvider.notifier);
+    final userRepository = ref.read(userRepositoryProvider);
     
-    // Simulation d'inscription (à remplacer par l'appel API réel)
-    final user = User(
-      id: 1,
+    // Appel API d'inscription via le repository
+    final result = await userRepository.register(
       name: _nameController.text,
       surname: _surnameController.text,
       phone: _phoneController.text,
-      email: _emailController.text.isEmpty ? null : _emailController.text,
-      isVerified: false,
-      createdAt: DateTime.now(),
+      email: _emailController.text.isEmpty ? '' : _emailController.text,
+      password: _passwordController.text,
     );
 
-    await authNotifier.loginUser(user);
+    result.fold(
+      (failure) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(failure.message),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      },
+      (data) async {
+        // Créer un objet utilisateur avec les données retournées
+        final user = User(
+          id: data['id'] ?? 1,
+          name: _nameController.text,
+          surname: _surnameController.text,
+          phone: _phoneController.text,
+          email: _emailController.text.isEmpty ? null : _emailController.text,
+          isVerified: data['is_verified'] ?? false,
+          createdAt: DateTime.now(),
+        );
 
-    if (mounted) {
-      context.go('/home');
-    }
+        // Sauvegarder l'utilisateur localement et mettre à jour l'état d'authentification
+        await authNotifier.loginUser(user);
+
+        if (mounted) {
+          context.go('/home');
+        }
+      },
+    );
   }
 
   @override

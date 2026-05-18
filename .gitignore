@@ -1,56 +1,29 @@
 ```
-# Flutter/Dart specific
-.dart_tool/
-.packages
-.pub-cache/
-pubspec.lock
-
-# Build outputs
+# Build artifacts
+*.dart_tool/
+*.build/
 build/
+
+# Dependencies
+.pub/
 .dart_tool/
-
-# IDE specific
-.idea/
-.vscode/
-
-# Environment files
-.env
-.env.local
-*.env.*
 
 # Logs
 *.log
 
-# Temporary files
-*.tmp
+# Environment
+.env
+.env.local
+*.env.*
+
+# Editor
+.vscode/
+.idea/
 *.swp
+*.swo
+*.tmp
 
-# Coverage
-coverage/
-*.lcov
-
-# macOS
+# OS
 .DS_Store
-
-# Windows
 Thumbs.db
-
-# Android
-*.keystore
-.gradle/
-local.properties
-
-# iOS
-.Pods/
-ios/Pods/
-ios/.symlinks/
-Podfile.lock
-
-# Web
-web/*.js
-web/*.map
-web/build/
-
-# Generated files
-lib/gen/
 ```

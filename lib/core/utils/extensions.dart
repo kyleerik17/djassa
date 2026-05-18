@@ -96,7 +96,9 @@ extension DateTimeExtensions on DateTime {
       'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'
     ];
     
-    return '$day ${months[month - 1]} $year à $hours:${minutes.toString().padLeft(2, '0')}';
+    final hours = this.hour.toString().padLeft(2, '0');
+    final minutes = this.minute.toString().padLeft(2, '0');
+    return '$day ${months[month - 1]} $year à $hours:$minutes';
   }
 
   /// Retourne "Il y a X temps"

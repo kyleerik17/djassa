@@ -88,8 +88,3 @@ final clearUserLocallyProvider = Provider((ref) {
   final repository = ref.watch(userRepositoryProvider);
   return ClearUserLocally(repository: repository);
 });
-
-final updateProfileProvider = Provider((ref) {
-  final repository = ref.watch(userRepositoryProvider);
-  return UpdateProfile(repository: repository);
-});

@@ -215,7 +215,7 @@ class DjassaTheme {
           color: textSecondary,
         ),
       ),
-      cardTheme: CardTheme(
+      cardTheme: CardThemeData(
         color: backgroundPrimary,
         elevation: 0,
         shape: RoundedRectangleBorder(
