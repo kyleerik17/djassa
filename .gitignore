@@ -1,31 +1,29 @@
 ```
-# Flutter/Dart specific
-.dart_tool/
-.packages
-pubspec.lock
-*.g.dart
-*.freezed.dart
-
-# Build outputs
+# Build artifacts
+*.dart_tool/
+*.build/
 build/
-**/ios/.generated/
-**/android/.generated/
 
-# IDE specific
-.vscode/
-.idea/
-*.swp
-*.swo
+# Dependencies
+.pub/
+.dart_tool/
 
 # Logs
 *.log
-**/logs
 
 # Environment
 .env
 .env.local
 *.env.*
 
-# Dependencies
-vendor/
+# Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+*.tmp
+
+# OS
+.DS_Store
+Thumbs.db
 ```
