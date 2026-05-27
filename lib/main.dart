@@ -7,16 +7,22 @@ import 'core/theme/djassa_theme.dart';
 import 'core/router/app_router.dart';
 import 'presentation/providers/core_providers.dart';
 import 'presentation/providers/auth_provider.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  
+
+  await Supabase.initialize(
+    url: 'https://wtfygkiuzjmndnirtevy.supabase.co',
+    anonKey: 'sb_publishable_BkULCR4lQWjtJzdwkdutEw_xxImMzKa',
+  );
+
   // Initialiser SharedPreferences
   final sharedPreferences = await SharedPreferences.getInstance();
-  
+
   // Configuration de la barre d'état
   SystemChrome.setSystemUIOverlayStyle(SystemUiOverlayStyle.light);
-  
+
   runApp(
     ProviderScope(
       overrides: [

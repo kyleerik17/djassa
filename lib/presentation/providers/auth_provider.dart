@@ -1,7 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../../domain/entities/user.dart';
-import '../../../domain/usecases/user_usecases.dart';
-import '../../core_providers.dart';
+import '../../domain/entities/user.dart';
+import '../../domain/usecases/user_usecases.dart';
+import 'core_providers.dart';
 
 /// État de l'authentification
 enum AuthStatus { initial, loading, authenticated, unauthenticated, error }
@@ -33,18 +33,19 @@ class AuthState {
 
   /// Vérifie si l'état est chargé
   bool get isLoading => status == AuthStatus.loading;
-  
+
   /// Vérifie si l'utilisateur est authentifié
   bool get isAuthenticated => status == AuthStatus.authenticated;
-  
+
   /// Vérifie s'il y a une erreur
   bool get hasError => status == AuthStatus.error;
 }
 
 /// Provider notifiant pour l'authentification
-final authNotifierProvider = StateNotifierProvider<AuthNotifier, AuthState>((ref) {
+final authNotifierProvider =
+    StateNotifierProvider<AuthNotifier, AuthState>((ref) {
   final repository = ref.watch(userRepositoryProvider);
-  
+
   return AuthNotifier(
     isLoggedIn: IsLoggedIn(repository: repository),
     getCurrentUser: GetCurrentUser(repository: repository),
@@ -82,10 +83,10 @@ class AuthNotifier extends StateNotifier<AuthState> {
   /// Vérifie l'état d'authentification au démarrage
   Future<void> checkAuthStatus() async {
     state = state.copyWith(status: AuthStatus.loading);
-    
+
     try {
       final loggedIn = await _isLoggedIn();
-      
+
       if (loggedIn) {
         final result = await _getCurrentUser();
         result.fold(
@@ -128,16 +129,16 @@ class AuthNotifier extends StateNotifier<AuthState> {
   /// Connecte l'utilisateur
   Future<void> loginUser(User user) async {
     state = state.copyWith(status: AuthStatus.loading);
-    
+
     try {
       await _saveUserLocally(user);
-      
+
       state = AuthState(
         status: AuthStatus.authenticated,
         user: user,
       );
     } catch (e) {
-      state = AuthState(
+      state = const AuthState(
         status: AuthStatus.error,
         errorMessage: 'Erreur lors de la connexion',
       );
@@ -147,23 +148,36 @@ class AuthNotifier extends StateNotifier<AuthState> {
   /// Déconnecte l'utilisateur
   Future<void> logoutUser() async {
     state = state.copyWith(status: AuthStatus.loading);
-    
+
     try {
       await _logout();
       await _clearUserLocally();
-      
+
       state = const AuthState(status: AuthStatus.unauthenticated);
     } catch (e) {
-      state = AuthState(
+      state = const AuthState(
         status: AuthStatus.error,
         errorMessage: 'Erreur lors de la déconnexion',
       );
     }
   }
 
-  /// Met à jour l'utilisateur
+  /// Met à jour l'utilisateur dans le state
   Future<void> updateUser(User user) async {
     state = state.copyWith(user: user);
+  }
+
+  /// Recharge le profil depuis Supabase et met à jour le state
+  Future<void> refreshUser() async {
+    try {
+      final result = await _getCurrentUser();
+      result.fold(
+        (_) {}, // Silencieux en cas d'échec, on garde l'état actuel
+        (user) {
+          state = state.copyWith(user: user);
+        },
+      );
+    } catch (_) {}
   }
 
   /// Réinitialise l'état

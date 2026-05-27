@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/theme/djassa_theme.dart';
 import '../../providers/auth_provider.dart';
+import '../../providers/core_providers.dart';
 import '../../widgets/buttons/djassa_button.dart';
 import '../../../domain/entities/user.dart';
 
@@ -16,13 +17,23 @@ class LoginScreen extends ConsumerStatefulWidget {
 
 class _LoginScreenState extends ConsumerState<LoginScreen> {
   final _formKey = GlobalKey<FormState>();
-  final _phoneController = TextEditingController();
+  final _identifierController = TextEditingController();
   final _passwordController = TextEditingController();
   bool _obscurePassword = true;
 
+  bool _isPhone(String value) {
+    final phoneRegex = RegExp(r'^\+?[0-9]{8,15}$');
+    return phoneRegex.hasMatch(value.replaceAll(' ', ''));
+  }
+
+  bool _isEmail(String value) {
+    final emailRegex = RegExp(r'^[^@]+@[^@]+\.[^@]+$');
+    return emailRegex.hasMatch(value);
+  }
+
   @override
   void dispose() {
-    _phoneController.dispose();
+    _identifierController.dispose();
     _passwordController.dispose();
     super.dispose();
   }
@@ -31,12 +42,12 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     if (!_formKey.currentState!.validate()) return;
 
     final authNotifier = ref.read(authNotifierProvider.notifier);
-    
-    // Appel API de connexion via le repository
+    final identifier = _identifierController.text.trim();
+
     final result = await ref.read(userRepositoryProvider).login(
-      phone: _phoneController.text,
-      password: _passwordController.text,
-    );
+          identifier: identifier,
+          password: _passwordController.text,
+        );
 
     result.fold(
       (failure) {
@@ -50,22 +61,24 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         }
       },
       (data) async {
-        // Créer un objet utilisateur avec les données retournées
-        final user = User(
-          id: data['id'] ?? 1,
-          name: data['name'] ?? 'Utilisateur',
-          surname: data['surname'] ?? '',
-          phone: _phoneController.text,
-          email: data['email'],
-          isVerified: data['is_verified'] ?? false,
-          createdAt: DateTime.now(),
-        );
+        final loadedUser = data['user'];
+        final user = loadedUser is User
+            ? loadedUser
+            : User(
+                id: data['id'] ?? '1',
+                name: data['name'] ?? 'Utilisateur',
+                surname: data['surname'] ?? '',
+                phone: data['phone'] ?? (_isPhone(identifier) ? identifier : ''),
+                email: data['email'] ?? (_isEmail(identifier) ? identifier : null),
+                isVerified: data['is_verified'] ?? false,
+                role: data['role'] ?? 'client',
+                createdAt: DateTime.now(),
+              );
 
-        // Sauvegarder l'utilisateur localement et mettre à jour l'état d'authentification
         await authNotifier.loginUser(user);
 
         if (mounted) {
-          context.go('/home');
+          context.go(user.isCourier ? '/courier' : '/home');
         }
       },
     );
@@ -123,20 +136,21 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    // Champ téléphone
+                    // Champ e-mail ou téléphone
                     TextFormField(
-                      controller: _phoneController,
-                      keyboardType: TextInputType.phone,
+                      controller: _identifierController,
+                      keyboardType: TextInputType.emailAddress,
                       decoration: const InputDecoration(
-                        labelText: 'Numéro de téléphone',
-                        prefixIcon: Icon(Icons.phone_outlined),
+                        labelText: 'E-mail ou numéro de téléphone',
+                        prefixIcon: Icon(Icons.person_outline),
                       ),
                       validator: (value) {
-                        if (value == null || value.isEmpty) {
-                          return 'Veuillez entrer votre numéro';
+                        if (value == null || value.trim().isEmpty) {
+                          return 'Veuillez entrer votre e-mail ou numéro de téléphone';
                         }
-                        if (value.length < 8) {
-                          return 'Numéro invalide';
+                        final v = value.trim();
+                        if (!_isEmail(v) && !_isPhone(v)) {
+                          return 'E-mail ou numéro de téléphone invalide';
                         }
                         return null;
                       },

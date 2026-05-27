@@ -1,8 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+
 import '../../../core/theme/djassa_theme.dart';
+
+import '../../../domain/entities/user.dart';
+
 import '../../providers/auth_provider.dart';
+import '../../providers/core_providers.dart';
+
 import '../../widgets/buttons/djassa_button.dart';
 import '../../widgets/inputs/djassa_text_field.dart';
 
@@ -16,16 +22,18 @@ class RegisterScreen extends ConsumerStatefulWidget {
 
 class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   final _formKey = GlobalKey<FormState>();
+
   final _nameController = TextEditingController();
   final _surnameController = TextEditingController();
   final _phoneController = TextEditingController();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
-  
+
   bool _obscurePassword = true;
   bool _obscureConfirmPassword = true;
   bool _acceptTerms = false;
+  String _selectedRole = 'client';
 
   @override
   void dispose() {
@@ -35,49 +43,130 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
     _emailController.dispose();
     _passwordController.dispose();
     _confirmPasswordController.dispose();
+
     super.dispose();
   }
 
-  void _handleRegister() async {
-    if (!_formKey.currentState!.validate()) return;
-    
-    if (!_acceptTerms) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Veuillez accepter les conditions d\'utilisation'),
-          backgroundColor: Colors.red,
-        ),
-      );
+  /// REGISTER USER
+  Future<void> _handleRegister() async {
+    if (!_formKey.currentState!.validate()) {
       return;
     }
 
-    final authNotifier = ref.read(authNotifierProvider.notifier);
-    
-    // Simulation d'inscription (à remplacer par l'appel API réel)
-    final user = User(
-      id: 1,
-      name: _nameController.text,
-      surname: _surnameController.text,
-      phone: _phoneController.text,
-      email: _emailController.text.isEmpty ? null : _emailController.text,
-      isVerified: false,
-      createdAt: DateTime.now(),
-    );
+    if (!_acceptTerms) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Veuillez accepter les conditions d\'utilisation',
+          ),
+          backgroundColor: Colors.red,
+        ),
+      );
 
-    await authNotifier.loginUser(user);
+      return;
+    }
 
-    if (mounted) {
-      context.go('/home');
+    try {
+      final authNotifier = ref.read(
+        authNotifierProvider.notifier,
+      );
+
+      final result = await ref.read(registerUserProvider).call(
+            name: _nameController.text.trim(),
+            surname: _surnameController.text.trim(),
+            phone: _phoneController.text.trim(),
+            email: _emailController.text.trim().toLowerCase(),
+            password: _passwordController.text.trim(),
+            role: _selectedRole,
+          );
+
+      result.fold(
+        /// ERROR
+        (failure) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                failure.message,
+              ),
+              backgroundColor: Colors.red,
+            ),
+          );
+        },
+
+        /// SUCCESS
+        (data) async {
+          try {
+            /// ICI user est déjà un UserModel
+            final userModel = data['user'];
+
+            /// Conversion vers Entity User
+            final user = User(
+              id: userModel.id,
+              name: userModel.name,
+              surname: userModel.surname,
+              phone: userModel.phone,
+              email: userModel.email,
+              avatarUrl: userModel.avatarUrl,
+              isVerified: userModel.isVerified,
+              role: userModel.role,
+              createdAt: userModel.createdAt,
+            );
+
+            /// SAVE USER
+            await authNotifier.loginUser(
+              user,
+            );
+
+            if (!mounted) return;
+
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text(
+                  'Compte créé avec succès',
+                ),
+                backgroundColor: Colors.green,
+              ),
+            );
+
+            /// REDIRECT
+            context.go(user.isCourier ? '/courier' : '/home');
+          } catch (e) {
+            if (!mounted) return;
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(
+                  'Erreur utilisateur : $e',
+                ),
+                backgroundColor: Colors.red,
+              ),
+            );
+          }
+        },
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Erreur : $e',
+          ),
+          backgroundColor: Colors.red,
+        ),
+      );
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final authState = ref.watch(authNotifierProvider);
+    final authState = ref.watch(
+      authNotifierProvider,
+    );
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Créer un compte'),
+        title: const Text(
+          'Créer un compte',
+        ),
         centerTitle: true,
       ),
       body: SafeArea(
@@ -88,7 +177,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                // En-tête
+                /// HEADER
                 Column(
                   children: [
                     Text(
@@ -106,71 +195,135 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
 
                 const SizedBox(height: 32),
 
-                // Nom
+                /// NOM
                 DjassaTextField(
                   controller: _nameController,
-                  labelText: 'Nom',
-                  prefixIcon: Icons.person_outline,
+                  label: 'Nom',
+                  prefixIcon: const Icon(
+                    Icons.person_outline,
+                  ),
                   validator: (value) {
                     if (value == null || value.isEmpty) {
                       return 'Veuillez entrer votre nom';
                     }
+
                     return null;
                   },
                 ),
 
                 const SizedBox(height: 16),
 
-                // Prénom
+                /// PRENOM
                 DjassaTextField(
                   controller: _surnameController,
-                  labelText: 'Prénom',
-                  prefixIcon: Icons.person_outline,
+                  label: 'Prénom',
+                  prefixIcon: const Icon(
+                    Icons.person_outline,
+                  ),
                   validator: (value) {
                     if (value == null || value.isEmpty) {
                       return 'Veuillez entrer votre prénom';
                     }
+
                     return null;
                   },
                 ),
 
                 const SizedBox(height: 16),
 
-                // Téléphone
+                /// PHONE
                 DjassaTextField(
                   controller: _phoneController,
-                  labelText: 'Numéro de téléphone',
-                  prefixIcon: Icons.phone_outlined,
+                  label: 'Numéro de téléphone',
+                  prefixIcon: const Icon(
+                    Icons.phone_outlined,
+                  ),
                   keyboardType: TextInputType.phone,
                   validator: (value) {
                     if (value == null || value.isEmpty) {
                       return 'Veuillez entrer votre numéro';
                     }
+
                     if (value.length < 8) {
                       return 'Numéro invalide';
                     }
+
                     return null;
                   },
                 ),
 
                 const SizedBox(height: 16),
 
-                // Email (optionnel)
+                /// EMAIL
                 DjassaTextField(
                   controller: _emailController,
-                  labelText: 'Email (optionnel)',
-                  prefixIcon: Icons.email_outlined,
+                  label: 'Email',
+                  prefixIcon: const Icon(
+                    Icons.email_outlined,
+                  ),
                   keyboardType: TextInputType.emailAddress,
-                  required: false,
+                  validator: (value) {
+                    final email = value?.trim() ?? '';
+                    if (email.isEmpty) {
+                      return 'Veuillez entrer votre email';
+                    }
+
+                    final emailRegex = RegExp(r'^[^@]+@[^@]+\.[^@]+$');
+                    if (!emailRegex.hasMatch(email)) {
+                      return 'Email invalide';
+                    }
+
+                    return null;
+                  },
                 ),
 
                 const SizedBox(height: 16),
 
-                // Mot de passe
+                /// TYPE DE PROFIL
+                Text(
+                  'Type de profil',
+                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                ),
+                const SizedBox(height: 8),
+                SegmentedButton<String>(
+                  segments: const [
+                    ButtonSegment(
+                      value: 'client',
+                      icon: Icon(Icons.person_outline_rounded),
+                      label: Text('Client'),
+                    ),
+                    ButtonSegment(
+                      value: 'courier',
+                      icon: Icon(Icons.delivery_dining_rounded),
+                      label: Text('Livreur'),
+                    ),
+                  ],
+                  selected: {_selectedRole},
+                  onSelectionChanged: (selection) {
+                    setState(() {
+                      _selectedRole = selection.first;
+                    });
+                  },
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  _selectedRole == 'courier'
+                      ? 'Le profil livreur re?oit les commandes disponibles et peut les accepter.'
+                      : 'Le profil client permet de passer des commandes.',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+
+                const SizedBox(height: 16),
+
+                /// PASSWORD
                 DjassaTextField(
                   controller: _passwordController,
-                  labelText: 'Mot de passe',
-                  prefixIcon: Icons.lock_outline,
+                  label: 'Mot de passe',
+                  prefixIcon: const Icon(
+                    Icons.lock_outline,
+                  ),
                   obscureText: _obscurePassword,
                   suffixIcon: IconButton(
                     icon: Icon(
@@ -188,20 +341,24 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                     if (value == null || value.isEmpty) {
                       return 'Veuillez entrer un mot de passe';
                     }
+
                     if (value.length < 6) {
                       return 'Le mot de passe doit contenir au moins 6 caractères';
                     }
+
                     return null;
                   },
                 ),
 
                 const SizedBox(height: 16),
 
-                // Confirmation mot de passe
+                /// CONFIRM PASSWORD
                 DjassaTextField(
                   controller: _confirmPasswordController,
-                  labelText: 'Confirmer le mot de passe',
-                  prefixIcon: Icons.lock_outline,
+                  label: 'Confirmer le mot de passe',
+                  prefixIcon: const Icon(
+                    Icons.lock_outline,
+                  ),
                   obscureText: _obscureConfirmPassword,
                   suffixIcon: IconButton(
                     icon: Icon(
@@ -219,16 +376,18 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                     if (value == null || value.isEmpty) {
                       return 'Veuillez confirmer votre mot de passe';
                     }
+
                     if (value != _passwordController.text) {
                       return 'Les mots de passe ne correspondent pas';
                     }
+
                     return null;
                   },
                 ),
 
                 const SizedBox(height: 24),
 
-                // Conditions d'utilisation
+                /// TERMS
                 Row(
                   children: [
                     Checkbox(
@@ -250,7 +409,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                           text: TextSpan(
                             text: "J'accepte les ",
                             style: Theme.of(context).textTheme.bodySmall,
-                            children: [
+                            children: const [
                               TextSpan(
                                 text: 'conditions d\'utilisation',
                                 style: TextStyle(
@@ -258,7 +417,9 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                                   fontWeight: FontWeight.w600,
                                 ),
                               ),
-                              const TextSpan(text: ' et la '),
+                              TextSpan(
+                                text: ' et la ',
+                              ),
                               TextSpan(
                                 text: 'politique de confidentialité',
                                 style: TextStyle(
@@ -276,7 +437,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
 
                 const SizedBox(height: 24),
 
-                // Bouton d'inscription
+                /// BUTTON
                 DjassaButton(
                   text: "S'inscrire",
                   isLoading: authState.isLoading,
@@ -285,39 +446,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
 
                 const SizedBox(height: 24),
 
-                // Message d'erreur
-                if (authState.hasError && authState.errorMessage != null)
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: Colors.red.shade50,
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: Colors.red.shade200),
-                    ),
-                    child: Row(
-                      children: [
-                        Icon(
-                          Icons.error_outline,
-                          color: Colors.red.shade700,
-                          size: 20,
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            authState.errorMessage!,
-                            style: TextStyle(
-                              color: Colors.red.shade700,
-                              fontSize: 14,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-
-                const SizedBox(height: 24),
-
-                // Déjà un compte
+                /// LOGIN
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
@@ -327,9 +456,13 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                     ),
                     TextButton(
                       onPressed: () {
-                        context.go('/login');
+                        context.go(
+                          '/login',
+                        );
                       },
-                      child: const Text('Se connecter'),
+                      child: const Text(
+                        'Se connecter',
+                      ),
                     ),
                   ],
                 ),

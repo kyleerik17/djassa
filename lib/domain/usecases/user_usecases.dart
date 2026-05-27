@@ -6,7 +6,8 @@ import '../../domain/repositories/user_repository.dart';
 class GetCurrentUser {
   final UserRepository _repository;
 
-  GetCurrentUser({required UserRepository repository}) : _repository = repository;
+  GetCurrentUser({required UserRepository repository})
+      : _repository = repository;
 
   Future<Either<Failure, User>> call() async {
     return await _repository.getCurrentUser();
@@ -39,7 +40,8 @@ class Logout {
 class UpdateProfile {
   final UserRepository _repository;
 
-  UpdateProfile({required UserRepository repository}) : _repository = repository;
+  UpdateProfile({required UserRepository repository})
+      : _repository = repository;
 
   Future<Either<Failure, User>> call(User user) async {
     return await _repository.updateProfile(user);
@@ -50,7 +52,8 @@ class UpdateProfile {
 class SaveUserLocally {
   final UserRepository _repository;
 
-  SaveUserLocally({required UserRepository repository}) : _repository = repository;
+  SaveUserLocally({required UserRepository repository})
+      : _repository = repository;
 
   Future<Either<Failure, void>> call(User user) async {
     return await _repository.saveUserLocally(user);
@@ -61,7 +64,8 @@ class SaveUserLocally {
 class GetUserLocally {
   final UserRepository _repository;
 
-  GetUserLocally({required UserRepository repository}) : _repository = repository;
+  GetUserLocally({required UserRepository repository})
+      : _repository = repository;
 
   Future<Either<Failure, User>> call() async {
     return await _repository.getUserLocally();
@@ -72,7 +76,8 @@ class GetUserLocally {
 class ClearUserLocally {
   final UserRepository _repository;
 
-  ClearUserLocally({required UserRepository repository}) : _repository = repository;
+  ClearUserLocally({required UserRepository repository})
+      : _repository = repository;
 
   Future<Either<Failure, void>> call() async {
     return await _repository.clearUserLocally();

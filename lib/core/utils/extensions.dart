@@ -71,14 +71,15 @@ extension StringExtensions on String {
 
   /// Vérifie si c'est un téléphone valide (format international)
   bool get isValidPhone {
-    return RegExp(r'^\+?[1-9]\d{1,14}$').hasMatch(replaceAll(RegExp(r'\D'), ''));
+    return RegExp(r'^\+?[1-9]\d{1,14}$')
+        .hasMatch(replaceAll(RegExp(r'\D'), ''));
   }
 
   /// Formate le numéro de téléphone
   String formatPhoneNumber() {
     final digits = replaceAll(RegExp(r'\D'), '');
     if (digits.length < 4) return this;
-    
+
     // Formatage simple selon longueur
     if (digits.length == 10) {
       return '${digits.substring(0, 2)} ${digits.substring(2, 4)} ${digits.substring(4, 6)} ${digits.substring(6, 8)} ${digits.substring(8)}';
@@ -92,11 +93,21 @@ extension DateTimeExtensions on DateTime {
   /// Formate la date en français
   String toFrenchString() {
     const months = [
-      'janvier', 'février', 'mars', 'avril', 'mai', 'juin',
-      'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'
+      'janvier',
+      'février',
+      'mars',
+      'avril',
+      'mai',
+      'juin',
+      'juillet',
+      'août',
+      'septembre',
+      'octobre',
+      'novembre',
+      'décembre'
     ];
-    
-    return '$day ${months[month - 1]} $year à $hours:${minutes.toString().padLeft(2, '0')}';
+
+    return '$day ${months[month - 1]} $year à $hour:${minute.toString().padLeft(2, '0')}';
   }
 
   /// Retourne "Il y a X temps"
@@ -124,10 +135,10 @@ extension DateTimeExtensions on DateTime {
 extension NumExtensions on num {
   /// Formate en prix FCFA
   String toFCFA() {
-    return toStringAsFixed(0).replaceAllMapped(
+    return '${toStringAsFixed(0).replaceAllMapped(
       RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
       (Match m) => '${m[1]} ',
-    ) + ' FCFA';
+    )} FCFA';
   }
 
   /// Formate avec séparateur de milliers

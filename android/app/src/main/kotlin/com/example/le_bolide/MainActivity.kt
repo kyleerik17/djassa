@@ -1,4 +1,4 @@
-package com.example.Bolide
+package com.example.Djassa
 
 import io.flutter.embedding.android.FlutterActivity
 

@@ -11,21 +11,23 @@ class UserModel extends User {
     super.email,
     super.avatarUrl,
     super.isVerified,
+    super.role,
     super.createdAt,
   });
 
   /// Crée depuis JSON
   factory UserModel.fromJson(Map<String, dynamic> json) {
     return UserModel(
-      id: json['id'] ?? 0,
+      id: json['id'] ?? '',
       name: json['name'] ?? '',
       surname: json['surname'] ?? '',
       phone: json['phone'] ?? '',
       email: json['email'],
       avatarUrl: json['avatar_url'],
       isVerified: json['is_verified'] ?? false,
-      createdAt: json['created_at'] != null 
-          ? DateTime.parse(json['created_at']) 
+      role: json['role'] ?? 'client',
+      createdAt: json['created_at'] != null
+          ? DateTime.parse(json['created_at'])
           : null,
     );
   }
@@ -37,6 +39,7 @@ class UserModel extends User {
   }
 
   /// Convertit en JSON
+  @override
   Map<String, dynamic> toJson() {
     return {
       'id': id,
@@ -46,6 +49,7 @@ class UserModel extends User {
       'email': email,
       'avatar_url': avatarUrl,
       'is_verified': isVerified,
+      'role': role,
       'created_at': createdAt?.toIso8601String(),
     };
   }
@@ -58,13 +62,14 @@ class UserModel extends User {
   /// Copie avec modifications
   @override
   UserModel copyWith({
-    int? id,
+    String? id,
     String? name,
     String? surname,
     String? phone,
     String? email,
     String? avatarUrl,
     bool? isVerified,
+    String? role,
     DateTime? createdAt,
   }) {
     return UserModel(
@@ -75,6 +80,7 @@ class UserModel extends User {
       email: email ?? this.email,
       avatarUrl: avatarUrl ?? this.avatarUrl,
       isVerified: isVerified ?? this.isVerified,
+      role: role ?? this.role,
       createdAt: createdAt ?? this.createdAt,
     );
   }
@@ -89,6 +95,7 @@ class UserModel extends User {
       email: user.email,
       avatarUrl: user.avatarUrl,
       isVerified: user.isVerified,
+      role: user.role,
       createdAt: user.createdAt,
     );
   }

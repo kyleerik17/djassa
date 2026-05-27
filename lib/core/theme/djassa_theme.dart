@@ -10,56 +10,56 @@ class DjassaTheme {
   static const Color secondaryWhite = Color(0xFFF5F5F5);
   static const Color accentOrange = Color(0xFFEA7C17);
   static const Color accentGreen = Color(0xFF4CAF50);
-  
+
   // Couleurs de texte
   static const Color textPrimary = Color(0xFF1A1A1A);
   static const Color textSecondary = Color(0xFF737373);
   static const Color textLight = Color(0xFFBDBDBD);
-  
+
   // Couleurs de fond
   static const Color backgroundPrimary = Color(0xFFFFFFFF);
   static const Color backgroundSecondary = Color(0xFFF8F8F8);
   static const Color backgroundDark = Color(0xFF1A1A1A);
-  
+
   // Couleurs de bordure
   static const Color borderLight = Color(0xFFCED0D4);
   static const Color borderMedium = Color(0xFFE0E0E0);
-  
+
   // Opacités
   static const double disabledOpacity = 0.5;
   static const double hoverOpacity = 0.8;
-  
+
   // Rayons
   static const double radiusSmall = 4.0;
   static const double radiusMedium = 8.0;
   static const double radiusLarge = 12.0;
   static const double radiusXLarge = 20.0;
-  
+
   // Ombres
   static List<BoxShadow> get shadowLight => [
         BoxShadow(
-          color: Colors.black.withOpacity(0.05),
+          color: Colors.black.withValues(alpha: 0.05),
           blurRadius: 10,
           offset: const Offset(0, 2),
         ),
       ];
-  
+
   static List<BoxShadow> get shadowMedium => [
         BoxShadow(
-          color: Colors.black.withOpacity(0.1),
+          color: Colors.black.withValues(alpha: 0.1),
           blurRadius: 15,
           offset: const Offset(0, 4),
         ),
       ];
-  
+
   static List<BoxShadow> get shadowHeavy => [
         BoxShadow(
-          color: Colors.black.withOpacity(0.15),
+          color: Colors.black.withValues(alpha: 0.15),
           blurRadius: 20,
           offset: const Offset(0, 6),
         ),
       ];
-  
+
   /// Thème Material léger (clair)
   static ThemeData get lightTheme {
     return ThemeData(
@@ -82,37 +82,43 @@ class DjassaTheme {
         displayLarge: TextStyle(
           fontSize: 32,
           fontWeight: FontWeight.bold,
-          fontFamily: 'Poppins',
+          fontFamily: 'Hemi Head',
+          letterSpacing: .2,
           color: textPrimary,
         ),
         displayMedium: TextStyle(
           fontSize: 28,
           fontWeight: FontWeight.bold,
-          fontFamily: 'Poppins',
+          fontFamily: 'Hemi Head',
+          letterSpacing: .2,
           color: textPrimary,
         ),
         displaySmall: TextStyle(
           fontSize: 24,
           fontWeight: FontWeight.w600,
-          fontFamily: 'Poppins',
+          fontFamily: 'Hemi Head',
+          letterSpacing: .2,
           color: textPrimary,
         ),
         headlineMedium: TextStyle(
           fontSize: 20,
           fontWeight: FontWeight.w600,
-          fontFamily: 'Poppins',
+          fontFamily: 'Hemi Head',
+          letterSpacing: .2,
           color: textPrimary,
         ),
         headlineSmall: TextStyle(
           fontSize: 18,
           fontWeight: FontWeight.w600,
-          fontFamily: 'Poppins',
+          fontFamily: 'Hemi Head',
+          letterSpacing: .2,
           color: textPrimary,
         ),
         titleLarge: TextStyle(
           fontSize: 16,
           fontWeight: FontWeight.w600,
-          fontFamily: 'Poppins',
+          fontFamily: 'Hemi Head',
+          letterSpacing: .2,
           color: textPrimary,
         ),
         titleMedium: TextStyle(
@@ -154,7 +160,8 @@ class DjassaTheme {
         titleTextStyle: TextStyle(
           fontSize: 18,
           fontWeight: FontWeight.w600,
-          fontFamily: 'Poppins',
+          fontFamily: 'Hemi Head',
+          letterSpacing: .2,
           color: textPrimary,
         ),
       ),
@@ -192,7 +199,8 @@ class DjassaTheme {
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
         fillColor: backgroundPrimary,
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        contentPadding:
+            const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(radiusSmall),
           borderSide: const BorderSide(color: borderLight),
@@ -215,7 +223,8 @@ class DjassaTheme {
           color: textSecondary,
         ),
       ),
-      cardTheme: CardTheme(
+      cardTheme: CardThemeData(
+        // <-- Correction : Utiliser CardThemeData
         color: backgroundPrimary,
         elevation: 0,
         shape: RoundedRectangleBorder(
@@ -241,8 +250,8 @@ class DjassaTheme {
         space: 1,
       ),
       checkboxTheme: CheckboxThemeData(
-        fillColor: MaterialStateProperty.resolveWith((states) {
-          if (states.contains(MaterialState.selected)) {
+        fillColor: WidgetStateProperty.resolveWith((states) {
+          if (states.contains(WidgetState.selected)) {
             return primaryBlack;
           }
           return Colors.transparent;
@@ -253,7 +262,7 @@ class DjassaTheme {
       ),
     );
   }
-  
+
   /// Thème Material sombre (optionnel)
   static ThemeData get darkTheme {
     return ThemeData(

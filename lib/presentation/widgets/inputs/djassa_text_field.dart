@@ -64,15 +64,15 @@ class DjassaTextField extends StatelessWidget {
         ],
         Container(
           decoration: BoxDecoration(
-            color: enabled 
-                ? DjassaTheme.backgroundPrimary 
+            color: enabled
+                ? DjassaTheme.backgroundPrimary
                 : DjassaTheme.secondaryWhite,
             borderRadius: BorderRadius.circular(DjassaTheme.radiusSmall),
             border: Border.all(
-              color: errorText != null 
-                  ? Colors.red 
-                  : enabled 
-                      ? DjassaTheme.borderLight 
+              color: errorText != null
+                  ? Colors.red
+                  : enabled
+                      ? DjassaTheme.borderLight
                       : DjassaTheme.borderMedium,
               width: 1.5,
             ),
@@ -180,8 +180,8 @@ class DjassaSearchField extends StatelessWidget {
             fontWeight: FontWeight.w400,
             fontSize: 14,
           ),
-          prefixIcon: Padding(
-            padding: const EdgeInsets.only(left: 12),
+          prefixIcon: const Padding(
+            padding: EdgeInsets.only(left: 12),
             child: Icon(
               Icons.search,
               size: 20,

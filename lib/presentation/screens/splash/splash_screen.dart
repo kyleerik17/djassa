@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:go_router/go_router.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../../core/theme/djassa_theme.dart';
 import '../../../core/utils/constants.dart';
 
@@ -13,7 +14,8 @@ class SplashScreen extends StatefulWidget {
   State<SplashScreen> createState() => _SplashScreenState();
 }
 
-class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMixin {
+class _SplashScreenState extends State<SplashScreen>
+    with TickerProviderStateMixin {
   bool _showFirstImage = false;
   bool _showSecondImage = false;
   bool _isBlackBackground = false;
@@ -31,13 +33,13 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
     // Premier délai avant d'afficher le premier logo
     await Future.delayed(const Duration(milliseconds: 500));
     if (!mounted) return;
-    
+
     setState(() => _showFirstImage = true);
 
     // Animation d'agrandissement
     await Future.delayed(const Duration(milliseconds: 300));
     if (!mounted) return;
-    
+
     setState(() {
       _imageWidth = 200;
       _imageHeight = 60;
@@ -46,13 +48,13 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
     // Transition vers fond noir
     await Future.delayed(const Duration(milliseconds: 800));
     if (!mounted) return;
-    
+
     setState(() => _isBlackBackground = true);
 
     // Transition vers deuxième logo
     await Future.delayed(const Duration(milliseconds: 600));
     if (!mounted) return;
-    
+
     setState(() {
       _showFirstImage = false;
       _showSecondImage = true;
@@ -61,20 +63,24 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
     // Affichage du texte
     await Future.delayed(const Duration(milliseconds: 400));
     if (!mounted) return;
-    
+
     setState(() => _showText = true);
 
     // Navigation vers onboarding ou home
     await Future.delayed(const Duration(milliseconds: 1200));
     if (!mounted) return;
-    
-    _navigateToNextScreen();
+
+    await _navigateToNextScreen();
   }
 
-  void _navigateToNextScreen() {
-    // Vérifier si l'utilisateur est connecté via le provider d'authentification
-    // Pour l'instant, on navigue vers login car pas encore authentifié
-    context.go(AppConstants.loginRoute);
+  Future<void> _navigateToNextScreen() async {
+    final prefs = await SharedPreferences.getInstance();
+    final onboardingDone =
+        prefs.getBool(AppConstants.onboardingCompleteKey) ?? false;
+    if (!mounted) return;
+    context.go(
+      onboardingDone ? AppConstants.loginRoute : AppConstants.onboardingRoute,
+    );
   }
 
   @override
@@ -88,7 +94,9 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
     return Scaffold(
       body: AnimatedContainer(
         duration: const Duration(seconds: 1),
-        color: _isBlackBackground ? DjassaTheme.backgroundDark : DjassaTheme.backgroundPrimary,
+        color: _isBlackBackground
+            ? DjassaTheme.backgroundDark
+            : DjassaTheme.backgroundPrimary,
         child: Center(
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
@@ -111,10 +119,11 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
                         ),
                       ),
                     )
-                      .animate(onPlay: (controller) => controller.repeat())
-                      .fadeIn(duration: 600.ms)
-                      .scale(begin: const Offset(0.5, 0.5), end: const Offset(1.0, 1.0)),
-                  
+                        .animate(onPlay: (controller) => controller.repeat())
+                        .fadeIn(duration: 600.ms)
+                        .scale(
+                            begin: const Offset(0.5, 0.5),
+                            end: const Offset(1.0, 1.0)),
                   if (_showSecondImage)
                     Opacity(
                       opacity: _showSecondImage ? 1.0 : 0.0,
@@ -132,30 +141,27 @@ class _SplashScreenState extends State<SplashScreen> with TickerProviderStateMix
                           ),
                         ),
                       ),
-                    )
-                      .animate()
-                      .fadeIn(duration: 800.ms),
+                    ).animate().fadeIn(duration: 800.ms),
                 ],
               ),
-              
               if (_showText)
                 Text(
                   'Djassa',
                   style: TextStyle(
-                    color: _isBlackBackground ? DjassaTheme.primaryWhite : DjassaTheme.textPrimary,
+                    color: _isBlackBackground
+                        ? DjassaTheme.primaryWhite
+                        : DjassaTheme.textPrimary,
                     fontWeight: FontWeight.w400,
                     fontSize: 50,
                     fontFamily: "Hemi Head",
                     letterSpacing: 0.05,
                   ),
-                )
-                  .animate(onPlay: (controller) => controller.forward())
-                  .moveX(
-                    begin: 200,
-                    end: 0,
-                    curve: Curves.easeOut,
-                    duration: 800.ms,
-                  ),
+                ).animate(onPlay: (controller) => controller.forward()).moveX(
+                      begin: 200,
+                      end: 0,
+                      curve: Curves.easeOut,
+                      duration: 800.ms,
+                    ),
             ],
           ),
         ),

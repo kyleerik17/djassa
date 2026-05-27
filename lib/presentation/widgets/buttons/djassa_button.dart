@@ -29,9 +29,7 @@ class DjassaButton extends StatelessWidget {
     return SizedBox(
       width: width ?? double.infinity,
       height: height ?? 50,
-      child: isOutlined
-          ? _buildOutlinedButton()
-          : _buildFilledButton(),
+      child: isOutlined ? _buildOutlinedButton() : _buildFilledButton(),
     );
   }
 
@@ -39,12 +37,11 @@ class DjassaButton extends StatelessWidget {
     return ElevatedButton(
       onPressed: isEnabled && !isLoading ? onPressed : null,
       style: ElevatedButton.styleFrom(
-        backgroundColor: isEnabled 
-            ? DjassaTheme.primaryBlack 
-            : DjassaTheme.textLight,
+        backgroundColor:
+            isEnabled ? DjassaTheme.primaryBlack : DjassaTheme.textLight,
         foregroundColor: DjassaTheme.primaryWhite,
         elevation: isEnabled ? 2 : 0,
-        shadowColor: DjassaTheme.primaryBlack.withOpacity(0.3),
+        shadowColor: DjassaTheme.primaryBlack.withValues(alpha: 0.3),
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(DjassaTheme.radiusSmall),
         ),
@@ -57,13 +54,10 @@ class DjassaButton extends StatelessWidget {
     return OutlinedButton(
       onPressed: isEnabled && !isLoading ? onPressed : null,
       style: OutlinedButton.styleFrom(
-        foregroundColor: isEnabled 
-            ? DjassaTheme.primaryBlack 
-            : DjassaTheme.textLight,
+        foregroundColor:
+            isEnabled ? DjassaTheme.primaryBlack : DjassaTheme.textLight,
         side: BorderSide(
-          color: isEnabled 
-              ? DjassaTheme.primaryBlack 
-              : DjassaTheme.textLight,
+          color: isEnabled ? DjassaTheme.primaryBlack : DjassaTheme.textLight,
           width: 1.5,
         ),
         shape: RoundedRectangleBorder(

@@ -1,162 +1,251 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import '../../presentation/screens/splash/splash_screen.dart';
+
+import '../../presentation/screens/admin/admin_products_screen.dart';
 import '../../presentation/screens/auth/login_screen.dart';
 import '../../presentation/screens/auth/register_screen.dart';
+import '../../presentation/screens/delivery/courier_orders_screen.dart';
 import '../../presentation/screens/home/home_screen.dart';
+import '../../presentation/screens/onboarding/onboarding_screen.dart';
+import '../../presentation/screens/shop/cart_screen.dart';
+import '../../presentation/screens/shop/categories_screen.dart';
+import '../../presentation/screens/shop/checkout_screen.dart';
+import '../../presentation/screens/shop/edit_profile_screen.dart';
+import '../../presentation/screens/shop/favorites_screen.dart';
+import '../../presentation/screens/shop/notifications_screen.dart';
+import '../../presentation/screens/shop/orders_screen.dart';
+import '../../presentation/screens/shop/payment_screen.dart';
+import '../../presentation/screens/shop/product_detail_screen.dart';
+import '../../presentation/screens/shop/profile_screen.dart';
+import '../../presentation/screens/shop/search_screen.dart';
+import '../../presentation/screens/shop/support_screen.dart';
+import '../../presentation/screens/splash/splash_screen.dart';
+import '../theme/djassa_theme.dart';
 import '../utils/constants.dart';
 
-/// Configuration du routeur GoRouter pour l'application Djassa
+/// Observateur de navigation personnalisé pour les logs.
+class NavigationLogger extends NavigatorObserver {
+  @override
+  void didPush(Route<dynamic> route, Route<dynamic>? previousRoute) {
+    super.didPush(route, previousRoute);
+    debugPrint('Navigation PUSH: ${route.settings.name ?? route}');
+  }
+
+  @override
+  void didPop(Route<dynamic> route, Route<dynamic>? previousRoute) {
+    super.didPop(route, previousRoute);
+    debugPrint('Navigation POP: ${route.settings.name ?? route}');
+  }
+
+  @override
+  void didReplace({Route<dynamic>? newRoute, Route<dynamic>? oldRoute}) {
+    super.didReplace(newRoute: newRoute, oldRoute: oldRoute);
+    debugPrint('Navigation REPLACE: ${newRoute?.settings.name ?? newRoute}');
+  }
+}
+
+/// Configuration du routeur GoRouter pour l'application Djassa.
 class AppRouter {
+  static final NavigationLogger _navigationLogger = NavigationLogger();
+
   static final GoRouter router = GoRouter(
     initialLocation: AppConstants.splashRoute,
     debugLogDiagnostics: true,
     routes: [
-      // Route de splash
-      GoRoute(
+      _route(
         path: AppConstants.splashRoute,
         name: 'splash',
-        builder: (context, state) => const SplashScreen(),
+        child: const SplashScreen(),
       ),
-      
-      // Routes d'authentification
-      GoRoute(
+      _route(
         path: AppConstants.loginRoute,
         name: 'login',
-        builder: (context, state) => const LoginScreen(),
+        child: const LoginScreen(),
       ),
-      GoRoute(
+      _route(
+        path: AppConstants.onboardingRoute,
+        name: 'onboarding',
+        child: const OnboardingScreen(),
+      ),
+      _route(
         path: AppConstants.registerRoute,
         name: 'register',
-        builder: (context, state) => const RegisterScreen(),
+        child: const RegisterScreen(),
       ),
-      
-      // Route principale - Home
-      GoRoute(
+      _route(
         path: AppConstants.homeRoute,
         name: 'home',
-        builder: (context, state) => const HomeScreen(),
+        child: const HomeScreen(),
       ),
-      
-      // Catégories
-      GoRoute(
+      _route(
         path: AppConstants.categoriesRoute,
         name: 'categories',
-        builder: (context, state) => _buildPlaceholder('Catégories'),
+        child: const CategoriesScreen(),
       ),
-      
-      // Recherche
       GoRoute(
         path: AppConstants.searchRoute,
         name: 'search',
-        builder: (context, state) => _buildPlaceholder('Recherche'),
+        pageBuilder: (context, state) => _page(
+          state,
+          SearchScreen(
+            initialQuery: state.uri.queryParameters['q'],
+            category: state.uri.queryParameters['category'],
+          ),
+        ),
       ),
-      
-      // Panier
-      GoRoute(
+      _route(
         path: AppConstants.cartRoute,
         name: 'cart',
-        builder: (context, state) => _buildPlaceholder('Panier'),
+        child: const CartScreen(),
       ),
-      
-      // Favoris
-      GoRoute(
+      _route(
         path: AppConstants.favoritesRoute,
         name: 'favorites',
-        builder: (context, state) => _buildPlaceholder('Favoris'),
+        child: const FavoritesScreen(),
       ),
-      
-      // Profil
-      GoRoute(
+      _route(
         path: AppConstants.profileRoute,
         name: 'profile',
-        builder: (context, state) => _buildPlaceholder('Profil'),
+        child: const ProfileScreen(),
       ),
-      
-      // Commandes
-      GoRoute(
+      _route(
+        path: AppConstants.editProfileRoute,
+        name: 'edit-profile',
+        child: const EditProfileScreen(),
+      ),
+      _route(
         path: AppConstants.ordersRoute,
         name: 'orders',
-        builder: (context, state) => _buildPlaceholder('Commandes'),
+        child: const OrdersScreen(),
       ),
-      
-      // Détail produit (avec paramètre)
       GoRoute(
         path: AppConstants.productDetailRoute,
         name: 'product-detail',
-        builder: (context, state) {
-          final productId = state.pathParameters['id'];
-          return _buildPlaceholder('Détail Produit: $productId');
-        },
+        pageBuilder: (context, state) => _page(
+          state,
+          ProductDetailScreen(productId: state.pathParameters['id']),
+        ),
+      ),
+      _route(
+        path: AppConstants.checkoutRoute,
+        name: 'checkout',
+        child: const CheckoutScreen(),
+      ),
+      GoRoute(
+        path: AppConstants.paymentRoute,
+        name: 'payment',
+        pageBuilder: (context, state) => _page(
+          state,
+          PaymentScreen(
+            orderId: state.pathParameters['orderId'] ?? '',
+            amount:
+                int.tryParse(state.uri.queryParameters['amount'] ?? '') ?? 0,
+            orderNumber: state.uri.queryParameters['number'],
+          ),
+        ),
+      ),
+      _route(
+        path: AppConstants.notificationsRoute,
+        name: 'notifications',
+        child: const NotificationsScreen(),
+      ),
+      _route(
+        path: AppConstants.supportRoute,
+        name: 'support',
+        child: const SupportScreen(),
+      ),
+      _route(
+        path: AppConstants.adminRoute,
+        name: 'admin',
+        child: const AdminProductsScreen(),
+      ),
+      _route(
+        path: AppConstants.courierRoute,
+        name: 'courier',
+        child: const CourierOrdersScreen(),
       ),
     ],
-    
-    // Gestion des erreurs de route
     errorBuilder: (context, state) => Scaffold(
+      backgroundColor: DjassaTheme.backgroundSecondary,
       body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Icon(Icons.error_outline, size: 64, color: Colors.red),
-            const SizedBox(height: 16),
-            Text(
-              'Page non trouvée',
-              style: Theme.of(context).textTheme.headlineSmall,
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Le chemin ${state.uri.path} n\'existe pas',
-              style: Theme.of(context).textTheme.bodyMedium,
-            ),
-          ],
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(
+                Icons.error_outline_rounded,
+                size: 72,
+                color: DjassaTheme.accentOrange,
+              ),
+              const SizedBox(height: 18),
+              Text(
+                'Page non trouvée',
+                style: Theme.of(context).textTheme.headlineSmall,
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Le chemin ${state.uri.path} n’existe pas.',
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.bodyMedium,
+              ),
+              const SizedBox(height: 18),
+              FilledButton(
+                onPressed: () => context.go(AppConstants.homeRoute),
+                child: const Text('Retour accueil'),
+              ),
+            ],
+          ),
         ),
       ),
     ),
-    
-    // Observateur de navigation pour le débogage
     observers: [
-      NavigatorObserver(
-        didPush: (route, previousRoute) {
-          debugPrint('🔵 Navigation PUSH: ${route.settings.name}');
-        },
-        didPop: (route, previousRoute) {
-          debugPrint('🔴 Navigation POP: ${route.settings.name}');
-        },
-        didReplace: (newRoute, oldRoute) {
-          debugPrint('🟡 Navigation REPLACE: ${newRoute.settings.name}');
-        },
-      ),
+      _navigationLogger,
+      HeroController(),
     ],
   );
-  
-  /// Widget placeholder temporaire
-  static Widget _buildPlaceholder(String title) {
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(title),
-        centerTitle: true,
-      ),
-      body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Icon(Icons.construction, size: 64, color: Colors.orange),
-            const SizedBox(height: 24),
-            Text(
-              title,
-              style: const TextStyle(
-                fontSize: 24,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            const SizedBox(height: 8),
-            const Text(
-              'En construction...',
-              style: TextStyle(fontSize: 16),
-            ),
-          ],
-        ),
-      ),
+
+  static GoRoute _route({
+    required String path,
+    required String name,
+    required Widget child,
+  }) {
+    return GoRoute(
+      path: path,
+      name: name,
+      pageBuilder: (context, state) => _page(state, child),
+    );
+  }
+
+  static CustomTransitionPage<dynamic> _page(
+    GoRouterState state,
+    Widget child,
+  ) {
+    return CustomTransitionPage<dynamic>(
+      key: state.pageKey,
+      name: state.name,
+      arguments: state.extra,
+      transitionDuration: const Duration(milliseconds: 280),
+      reverseTransitionDuration: const Duration(milliseconds: 220),
+      child: child,
+      transitionsBuilder: (context, animation, secondaryAnimation, child) {
+        final curvedAnimation = CurvedAnimation(
+          parent: animation,
+          curve: Curves.easeOutCubic,
+          reverseCurve: Curves.easeInCubic,
+        );
+
+        return FadeTransition(
+          opacity: curvedAnimation,
+          child: SlideTransition(
+            position: Tween<Offset>(
+              begin: const Offset(.04, .02),
+              end: Offset.zero,
+            ).animate(curvedAnimation),
+            child: child,
+          ),
+        );
+      },
     );
   }
 }

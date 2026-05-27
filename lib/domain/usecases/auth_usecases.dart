@@ -9,10 +9,10 @@ class LoginUser {
   LoginUser({required UserRepository repository}) : _repository = repository;
 
   Future<Either<Failure, Map<String, dynamic>>> call({
-    required String phone,
+    required String identifier,
     required String password,
   }) async {
-    return await _repository.login(phone: phone, password: password);
+    return await _repository.login(identifier: identifier, password: password);
   }
 }
 
@@ -28,6 +28,7 @@ class RegisterUser {
     required String phone,
     required String email,
     required String password,
+    String role = 'client',
   }) async {
     return await _repository.register(
       name: name,
@@ -35,6 +36,7 @@ class RegisterUser {
       phone: phone,
       email: email,
       password: password,
+      role: role,
     );
   }
 }
@@ -43,7 +45,8 @@ class RegisterUser {
 class UpdateProfile {
   final UserRepository _repository;
 
-  UpdateProfile({required UserRepository repository}) : _repository = repository;
+  UpdateProfile({required UserRepository repository})
+      : _repository = repository;
 
   Future<Either<Failure, User>> call(User user) async {
     return await _repository.updateProfile(user);

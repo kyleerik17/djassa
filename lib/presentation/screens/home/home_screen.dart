@@ -1,332 +1,250 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+
 import '../../../core/theme/djassa_theme.dart';
 import '../../providers/auth_provider.dart';
+import '../../providers/core_providers.dart';
+import '../../widgets/shop/delivery_tracking_widgets.dart';
+import '../../widgets/shop/shop_widgets.dart';
 
-/// Écran d'accueil Djassa
-class HomeScreen extends ConsumerWidget {
+class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends ConsumerState<HomeScreen> {
+  void _announceStageIfNeeded(
+    DeliveryTracking tracking,
+    DeliveryTrackingStage stage,
+  ) {
+    final notifier = ref.read(deliveryTrackingProvider.notifier);
+    if (notifier.wasStageAnnounced(tracking.orderId, stage)) return;
+
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) return;
+      await notifier.markStageAnnounced(tracking.orderId, stage);
+      if (!mounted) return;
+      await showDeliveryStageDialog(
+        context,
+        tracking: tracking,
+        stage: stage,
+      );
+      if (stage == DeliveryTrackingStage.delivered) {
+        await notifier.clear();
+      }
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final authState = ref.watch(authNotifierProvider);
     final user = authState.user;
+    final categoriesAsync = ref.watch(categoriesProvider);
+    final productsAsync = ref.watch(productsProvider);
+    final tracking = ref.watch(deliveryTrackingProvider);
+    final now = ref.watch(deliveryTrackingClockProvider).maybeWhen(
+          data: (value) => value,
+          orElse: DateTime.now,
+        );
+    final trackingStage = tracking?.stageAt(now);
+    final liveSnapshot = tracking == null
+        ? null
+        : ref.watch(liveDeliveryTrackingProvider(tracking)).maybeWhen(
+              data: (value) => value,
+              orElse: () => null,
+            );
+    final clientGpsStatus = tracking == null
+        ? null
+        : ref.watch(clientLocationPublisherProvider(tracking)).maybeWhen(
+              data: (value) => value,
+              orElse: () => null,
+            );
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Djassa'),
-        centerTitle: true,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.notifications_outlined),
-            onPressed: () {
-              // TODO: Navigation vers notifications
-            },
-          ),
-        ],
-      ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Salutation
-            Card(
-              elevation: 0,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-                side: BorderSide(color: DjassaTheme.borderMedium),
-              ),
-              child: Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: Row(
+    if (tracking != null && trackingStage != null) {
+      _announceStageIfNeeded(tracking, trackingStage);
+      if (trackingStage == DeliveryTrackingStage.delivered) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          ref.read(deliveryTrackingProvider.notifier).clearIfDelivered();
+        });
+      }
+    }
+
+    return ShopScaffold(
+      currentIndex: 0,
+      title: 'Djassa',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    CircleAvatar(
-                      radius: 30,
-                      backgroundColor: DjassaTheme.accentOrange.withOpacity(0.1),
-                      child: user?.avatarUrl != null
-                          ? ClipOval(
-                              child: Image.network(
-                                user!.avatarUrl!,
-                                width: 60,
-                                height: 60,
-                                fit: BoxFit.cover,
-                              ),
-                            )
-                          : Icon(
-                              Icons.person,
-                              size: 30,
-                              color: DjassaTheme.accentOrange,
-                            ),
+                    Text(
+                      'Bonjour ${user?.fullName ?? 'à vous'} 👋',
+                      style: Theme.of(context).textTheme.titleLarge,
                     ),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Bonjour, ${user?.fullName ?? "Utilisateur"}',
-                            style: Theme.of(context).textTheme.titleLarge,
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            'Trouvez vos pièces détachées premium',
-                            style: Theme.of(context).textTheme.bodySmall,
-                          ),
-                        ],
-                      ),
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.edit_outlined),
-                      onPressed: () {
-                        context.go('/profile');
-                      },
+                    const SizedBox(height: 4),
+                    Text(
+                      'Articles fiables, livraison rapide.',
+                      style: Theme.of(context).textTheme.bodyMedium,
                     ),
                   ],
                 ),
               ),
-            ),
-
-            const SizedBox(height: 24),
-
-            // Barre de recherche
-            TextField(
-              decoration: InputDecoration(
-                hintText: 'Rechercher une pièce...',
-                prefixIcon: const Icon(Icons.search),
-                suffixIcon: IconButton(
-                  icon: const Icon(Icons.filter_list),
-                  onPressed: () {
-                    // TODO: Ouvrir filtres
-                  },
-                ),
-                filled: true,
-                fillColor: DjassaTheme.backgroundSecondary,
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
-                  borderSide: BorderSide.none,
+              InkWell(
+                borderRadius: BorderRadius.circular(18),
+                onTap: () => context.go('/profile'),
+                child: CircleAvatar(
+                  radius: 25,
+                  backgroundColor:
+                      DjassaTheme.accentOrange.withValues(alpha: .13),
+                  child: const Icon(
+                    Icons.person_rounded,
+                    color: DjassaTheme.accentOrange,
+                  ),
                 ),
               ),
-              onSubmitted: (value) {
-                context.go('/search?q=$value');
-              },
+            ],
+          ),
+          const SizedBox(height: 18),
+          if (tracking != null &&
+              trackingStage != null &&
+              trackingStage != DeliveryTrackingStage.delivered) ...[
+            DeliveryTrackingCard(
+              tracking: tracking,
+              stage: trackingStage,
+              now: now,
+              snapshot: liveSnapshot,
+              clientGpsStatus: clientGpsStatus,
+              onTap: () => showDeliveryStageDialog(
+                context,
+                tracking: tracking,
+                stage: trackingStage,
+              ),
             ),
-
-            const SizedBox(height: 24),
-
-            // Catégories rapides
-            Text(
-              'Catégories populaires',
-              style: Theme.of(context).textTheme.titleMedium,
-            ),
-            const SizedBox(height: 12),
-
-            SizedBox(
-              height: 100,
-              child: ListView(
-                scrollDirection: Axis.horizontal,
+            const SizedBox(height: 18),
+          ],
+          InkWell(
+            borderRadius: BorderRadius.circular(22),
+            onTap: () => context.go('/search'),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 15),
+              decoration: BoxDecoration(
+                color: DjassaTheme.primaryWhite,
+                borderRadius: BorderRadius.circular(22),
+                border: Border.all(color: DjassaTheme.borderMedium),
+              ),
+              child: Row(
                 children: [
-                  _buildCategoryItem(
-                    context,
-                    icon: Icons.engineering,
-                    label: 'Moteur',
+                  const Icon(Icons.search_rounded),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      'Rechercher un article, une marque...',
+                      style: Theme.of(context).textTheme.bodyMedium,
+                    ),
                   ),
-                  _buildCategoryItem(
-                    context,
-                    icon: Icons.car_crash,
-                    label: 'Carrosserie',
-                  ),
-                  _buildCategoryItem(
-                    context,
-                    icon: Icons.brightness_5,
-                    label: 'Éclairage',
-                  ),
-                  _buildCategoryItem(
-                    context,
-                    icon: Icons.water_drop,
-                    label: 'Freinage',
-                  ),
-                  _buildCategoryItem(
-                    context,
-                    icon: Icons.settings,
-                    label: 'Suspension',
+                  const Icon(
+                    Icons.tune_rounded,
+                    color: DjassaTheme.accentOrange,
                   ),
                 ],
               ),
             ),
-
-            const SizedBox(height: 24),
-
-            // Produits recommandés
-            Text(
-              'Recommandé pour vous',
-              style: Theme.of(context).textTheme.titleMedium,
+          ),
+          const SizedBox(height: 18),
+          PromoCard(
+            title: 'Promos du moment',
+            subtitle:
+                'Découvrez les meilleures offres sélectionnées pour vous.',
+            buttonLabel: 'Voir les promos',
+            icon: Icons.local_offer_rounded,
+            onPressed: () => context.go('/categories'),
+          ),
+          const SizedBox(height: 24),
+          SectionTitle(
+            title: 'Rayons populaires',
+            actionLabel: 'Tout voir',
+            onAction: () => context.go('/categories'),
+          ),
+          const SizedBox(height: 12),
+          categoriesAsync.when(
+            loading: () => const SizedBox(
+              height: 154,
+              child: Center(child: CircularProgressIndicator()),
             ),
-            const SizedBox(height: 12),
-
-            GridView.builder(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 2,
-                mainAxisSpacing: 12,
-                crossAxisSpacing: 12,
-                childAspectRatio: 0.75,
-              ),
-              itemCount: 4,
-              itemBuilder: (context, index) {
-                return _buildProductCard(context, index);
-              },
-            ),
-
-            const SizedBox(height: 100), // Espace pour la barre de navigation
-          ],
-        ),
-      ),
-      bottomNavigationBar: BottomNavigationBar(
-        currentIndex: 0,
-        onTap: (index) {
-          switch (index) {
-            case 0:
-              // Déjà sur home
-              break;
-            case 1:
-              context.go('/categories');
-              break;
-            case 2:
-              context.go('/cart');
-              break;
-            case 3:
-              context.go('/favorites');
-              break;
-            case 4:
-              context.go('/profile');
-              break;
-          }
-        },
-        items: const [
-          BottomNavigationBarItem(
-            icon: Icon(Icons.home_outlined),
-            activeIcon: Icon(Icons.home),
-            label: 'Accueil',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.category_outlined),
-            activeIcon: Icon(Icons.category),
-            label: 'Catégories',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.shopping_cart_outlined),
-            activeIcon: Icon(Icons.shopping_cart),
-            label: 'Panier',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.favorite_outline),
-            activeIcon: Icon(Icons.favorite),
-            label: 'Favoris',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.person_outline),
-            activeIcon: Icon(Icons.person),
-            label: 'Profil',
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildCategoryItem(
-    BuildContext context, {
-    required IconData icon,
-    required String label,
-  }) {
-    return Container(
-      width: 80,
-      margin: const EdgeInsets.only(right: 12),
-      child: Column(
-        children: [
-          Container(
-            width: 60,
-            height: 60,
-            decoration: BoxDecoration(
-              color: DjassaTheme.accentOrange.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Icon(
-              icon,
-              color: DjassaTheme.accentOrange,
-              size: 28,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            label,
-            style: Theme.of(context).textTheme.bodySmall,
-            textAlign: TextAlign.center,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildProductCard(BuildContext context, int index) {
-    return Card(
-      elevation: 0,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(8),
-        side: BorderSide(color: DjassaTheme.borderMedium),
-      ),
-      child: InkWell(
-        onTap: () {
-          context.go('/product/${index + 1}');
-        },
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              child: Container(
-                decoration: BoxDecoration(
-                  color: DjassaTheme.backgroundSecondary,
-                  borderRadius: const BorderRadius.vertical(
-                    top: Radius.circular(8),
-                  ),
-                ),
-                child: Center(
-                  child: Icon(
-                    Icons.directions_car,
-                    size: 40,
-                    color: Colors.grey.shade400,
-                  ),
+            error: (e, _) => SizedBox(
+              height: 154,
+              child: Center(
+                child: Text(
+                  'Impossible de charger les catégories.',
+                  style: Theme.of(context).textTheme.bodyMedium,
                 ),
               ),
             ),
-            Padding(
-              padding: const EdgeInsets.all(8.0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Pièce Premium ${index + 1}',
-                    style: Theme.of(context).textTheme.titleSmall,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
+            data: (categories) => categories.isEmpty
+                ? const SizedBox(
+                    height: 154,
+                    child: Center(child: Text('Aucune catégorie disponible.')),
+                  )
+                : SizedBox(
+                    height: 154,
+                    child: ListView.separated(
+                      scrollDirection: Axis.horizontal,
+                      itemCount: categories.length,
+                      separatorBuilder: (_, __) => const SizedBox(width: 12),
+                      itemBuilder: (context, index) {
+                        final category = categories[index];
+                        return CategoryPill(
+                          category: category,
+                          onTap: () => context.go(
+                            '/search?category=${category.name}',
+                          ),
+                        );
+                      },
+                    ),
                   ),
-                  const SizedBox(height: 4),
-                  Text(
-                    'À partir de ${(100 * (index + 1)).toString()} FCFA',
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: DjassaTheme.accentOrange,
-                          fontWeight: FontWeight.w600,
-                        ),
-                  ),
-                ],
+          ),
+          const SizedBox(height: 24),
+          SectionTitle(
+            title: 'Meilleures ventes',
+            actionLabel: 'Recherche',
+            onAction: () => context.go('/search'),
+          ),
+          const SizedBox(height: 12),
+          productsAsync.when(
+            loading: () => const Center(child: CircularProgressIndicator()),
+            error: (e, _) => Center(
+              child: Text(
+                'Impossible de charger les produits.',
+                style: Theme.of(context).textTheme.bodyMedium,
               ),
             ),
-          ],
-        ),
+            data: (products) => products.isEmpty
+                ? const Center(child: Text('Aucun produit disponible.'))
+                : GridView.builder(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    itemCount: products.length,
+                    gridDelegate:
+                        const SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: 2,
+                      mainAxisSpacing: 14,
+                      crossAxisSpacing: 14,
+                      childAspectRatio: .67,
+                    ),
+                    itemBuilder: (context, index) {
+                      return ProductCard(product: products[index]);
+                    },
+                  ),
+          ),
+          const SizedBox(height: 88),
+        ],
       ),
     );
   }
