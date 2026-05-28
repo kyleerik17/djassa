@@ -1,7 +1,9 @@
+import 'package:djassa/core/theme/avatar_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
+
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../core/services/supabase_service.dart';
@@ -548,6 +550,7 @@ class _CourierProfileTabState extends ConsumerState<_CourierProfileTab> {
               phone: user?.phone ?? user?.email ?? '',
               available: _isAvailable,
               profileComplete: profile.isProfileComplete,
+              avatarUrl: user?.avatarUrl,
             ),
             const SizedBox(height: 18),
             Form(
@@ -1374,21 +1377,23 @@ class _StatPill extends StatelessWidget {
   }
 }
 
-class _CourierIdentityCard extends StatelessWidget {
+class _CourierIdentityCard extends ConsumerWidget {
   const _CourierIdentityCard({
     required this.name,
     required this.phone,
     required this.available,
     required this.profileComplete,
+    this.avatarUrl,
   });
 
   final String name;
   final String phone;
   final bool available;
   final bool profileComplete;
+  final String? avatarUrl;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
@@ -1397,14 +1402,15 @@ class _CourierIdentityCard extends StatelessWidget {
       ),
       child: Row(
         children: [
-          CircleAvatar(
+          AvatarPicker(
+            currentUrl: avatarUrl,
             radius: 32,
+            fallbackIcon: Icons.delivery_dining_rounded,
+            fallbackColor: DjassaTheme.accentOrange,
             backgroundColor: DjassaTheme.accentOrange.withValues(alpha: .16),
-            child: const Icon(
-              Icons.delivery_dining_rounded,
-              color: DjassaTheme.accentOrange,
-              size: 34,
-            ),
+            onUpdated: (_) {
+              ref.read(authNotifierProvider.notifier).refreshUser();
+            },
           ),
           const SizedBox(width: 14),
           Expanded(

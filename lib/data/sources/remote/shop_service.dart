@@ -27,7 +27,8 @@ class ShopService {
         name: json['name'] ?? '',
         icon: _iconFromName(json['icon_name']),
         subtitle: json['subtitle'] ?? '',
-        itemsCount: json['items_count'] ?? 0,
+        // ✅ items_count n'existe pas → valeur par défaut
+        itemsCount: 0,
       );
     }).toList();
   }
@@ -96,7 +97,8 @@ class ShopService {
         status: _statusLabel(json['status']),
         date: _formatDate(json['created_at']),
         total: json['total'] ?? 0,
-        items: json['items_count'] ?? 1,
+        // ✅ items_count n'existe pas → valeur par défaut (ou calcule via order_items)
+        items: 1,
       );
     }).toList();
   }
@@ -117,6 +119,7 @@ class ShopService {
     const deliveryFee = 2500;
     final total = subtotal + deliveryFee;
 
+    // ✅ Ne PAS inclure 'items_count' dans l'insert (colonne inexistante)
     final order = await _client
         .from('orders')
         .insert({
@@ -127,8 +130,8 @@ class ShopService {
           'subtotal': subtotal,
           'delivery_fee': deliveryFee,
           'total': total,
-          'items_count': lines.fold<int>(0, (sum, line) => sum + line.quantity),
           'status': 'pending_payment',
+          // ❌ 'items_count': ... ← SUPPRIMÉ (n'existe pas dans le schema)
         })
         .select()
         .single();
@@ -153,50 +156,54 @@ class ShopService {
     return Map<String, dynamic>.from(order);
   }
 
-
   /// [provider] : 'wave' | 'orange_money' | 'moov_money' | 'mtn_money'
   ///
-  /// La cl? GeniusPay reste c?t? backend. Flutter appelle seulement la
+  /// La clé GeniusPay reste côté backend. Flutter appelle seulement la
   /// Supabase Edge Function `create-payment`.
-  Future<Map<String, dynamic>> createPayment({
-    required String orderId,
-    required int amount,
-    required String provider,
-    required String customerPhone,
-    String? customerName,
-  }) async {
-    final user = _client.auth.currentUser;
-    if (user == null) throw Exception('Connectez-vous avant de payer.');
+Future<Map<String, dynamic>> createPayment({
+  required String orderId,
+  required int amount,
+  required String provider,
+  required String customerPhone,
+  String? customerName,
+}) async {
+  final user = _client.auth.currentUser;
+  if (user == null) throw Exception('Connectez-vous avant de payer.');
 
-    final response = await _client.functions.invoke(
-      'create-payment',
-      body: {
-        'order_id': orderId,
-        'amount': amount,
-        'provider': provider,
-        'customer_phone': customerPhone,
-        if (customerName != null && customerName.isNotEmpty)
-          'customer_name': customerName,
-      },
-    );
+  final response = await _client.functions.invoke(
+    'create-geniuspay-payment',
+    body: {
+      'order_id': orderId,
+      'amount': amount,
+      'provider': provider,
+      'customer_phone': customerPhone,
+      if (customerName != null && customerName.isNotEmpty)
+        'customer_name': customerName,
+    },
+  );
 
-    final rawData = response.data;
-    if (rawData is! Map) {
-      throw Exception('R?ponse paiement invalide.');
-    }
+  // ✅ Cast explicite pour accéder aux propriétés avec ['key']
+  final data = response.data as Map<String, dynamic>;
 
-    final data = Map<String, dynamic>.from(rawData);
-    final checkoutUrl = data['checkout_url']?.toString();
-
-    if (checkoutUrl == null || checkoutUrl.isEmpty) {
-      throw Exception('checkout_url manquante dans la r?ponse GeniusPay.');
-    }
-
-    return {
-      'checkout_url': checkoutUrl,
-      'reference': data['reference']?.toString(),
-    };
+  // ✅ Vérifier les erreurs métier dans la réponse
+  if (data['error'] != null) {
+    throw Exception('Erreur GeniusPay: ${data['error']}');
   }
+
+  final checkoutUrl = data['checkout_url']?.toString();
+  if (checkoutUrl == null || checkoutUrl.isEmpty) {
+    throw Exception('checkout_url manquante dans la réponse GeniusPay.');
+  }
+
+  // ✅ Retourner les données avec cast sécurisé
+  return {
+    'checkout_url': checkoutUrl,
+    'reference': data['reference']?.toString(),
+    'payment_id': data['payment_id']?.toString(),
+    'amount': data['amount'] as int?,
+    'provider': data['provider']?.toString(),
+  };
+}
 
   // ─── Helpers ──────────────────────────────────────────────────────────────
 
@@ -236,7 +243,7 @@ class ShopService {
       case 'confirmed':
         return 'Confirmée';
       case 'courier_assigned':
-        return 'Livreur assign?';
+        return 'Livreur assigné';
       case 'shipping':
         return 'En route';
       case 'delivered':

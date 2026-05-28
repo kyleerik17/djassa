@@ -1,7 +1,10 @@
+import 'package:djassa/core/services/geniuspay_service.dart';
 import 'package:djassa/presentation/screens/shop/shop_data.dart';
+import 'package:djassa/presentation/widgets/shop/payment_webview.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/theme/djassa_theme.dart';
@@ -170,55 +173,83 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen> {
   }
 
   Future<void> _openCheckout() async {
-    final user = ref.read(authNotifierProvider).user;
+  final user = ref.read(authNotifierProvider).user;
+  if (user == null) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Veuillez vous connecter')),
+    );
+    return;
+  }
 
-    // Demander opérateur + numéro avant tout appel API
-    final paymentInfo = await _askPaymentInfo(user?.phone);
-    if (paymentInfo == null || !mounted) return;
+  final paymentInfo = await _askPaymentInfo(user.phone);
+  if (paymentInfo == null || !mounted) return;
 
-    final phone    = paymentInfo['phone']!;
-    final provider = paymentInfo['provider']!;
+  final phone = paymentInfo['phone']!;
+  final provider = paymentInfo['provider']!;
 
-    setState(() => _isLoading = true);
-    try {
-      final payment = await ref.read(shopServiceProvider).createPayment(
-            orderId:       widget.orderId,
-            amount:        widget.amount,
-            provider:      provider,     // ✅ paramètre requis
-            customerPhone: phone,
-            customerName:  user?.fullName,
-          );
+  setState(() => _isLoading = true);
+  
+  try {
+    final geniusPayService = GeniusPayService(Supabase.instance.client);
+    
+    final result = await geniusPayService.createPayment(
+      orderId: widget.orderId,
+      provider: provider,
+      customerPhone: phone,
+      customerName: user.fullName,
+    );
 
-      final checkoutUrl = payment['checkout_url'] as String?;
-      if (checkoutUrl == null || checkoutUrl.isEmpty) {
-        throw Exception('URL de paiement introuvable.');
-      }
+    if (!mounted) return;
 
-      final uri = Uri.parse(checkoutUrl);
-      if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
-        throw Exception('Impossible d\'ouvrir la page de paiement.');
-      }
+    final paymentSuccess = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => PaymentWebView(
+          paymentUrl: result.checkoutUrl,
+          reference: result.reference,
+          onPaymentSuccess: () {
+            // ✅ Rafraîchir uniquement ordersProvider (le seul qui existe)
+            ref.invalidate(ordersProvider);
+          },
+        ),
+      ),
+    );
 
-      ref.invalidate(ordersProvider);
+    if (!mounted) return;
 
-      if (!mounted) return;
+    if (paymentSuccess == true) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text(
-              'Page de paiement ouverte. Revenez après confirmation.'),
+          content: Text('✅ Paiement confirmé !'),
+          backgroundColor: Colors.green,
+          duration: Duration(seconds: 3),
         ),
       );
       context.go('/orders');
-    } catch (e) {
-      if (!mounted) return;
+    } else if (paymentSuccess == false) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Erreur paiement : $e')),
+        const SnackBar(
+          content: Text('Paiement annulé ou échoué'),
+          backgroundColor: Colors.orange,
+        ),
       );
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
     }
-  }
 
+  } catch (e) {
+    if (!mounted) return;
+    
+    String message = 'Erreur : $e';
+    if (e.toString().contains('Session invalide')) {
+      message = 'Session expirée, veuillez vous reconnecter';
+    }
+    
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message)),
+    );
+  } finally {
+    if (mounted) setState(() => _isLoading = false);
+  }
+}
   @override
   Widget build(BuildContext context) {
     return ShopScaffold(

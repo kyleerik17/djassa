@@ -18,7 +18,6 @@ class AuthState {
     this.errorMessage,
   });
 
-  /// Crée un état avec les données utilisateur
   AuthState copyWith({
     AuthStatus? status,
     User? user,
@@ -31,13 +30,8 @@ class AuthState {
     );
   }
 
-  /// Vérifie si l'état est chargé
   bool get isLoading => status == AuthStatus.loading;
-
-  /// Vérifie si l'utilisateur est authentifié
   bool get isAuthenticated => status == AuthStatus.authenticated;
-
-  /// Vérifie s'il y a une erreur
   bool get hasError => status == AuthStatus.error;
 }
 
@@ -80,49 +74,83 @@ class AuthNotifier extends StateNotifier<AuthState> {
         _clearUserLocally = clearUserLocally,
         super(const AuthState());
 
-  /// Vérifie l'état d'authentification au démarrage
+  /// Vérifie l'état d'authentification au démarrage.
+  ///
+  /// Stratégie "rester connecté" :
+  /// 1. On lit d'abord l'utilisateur stocké localement (SharedPreferences).
+  ///    S'il existe, on considère l'utilisateur comme authentifié immédiatement
+  ///    (UX : pas d'écran de login au lancement).
+  /// 2. En arrière-plan, on tente de rafraîchir le profil depuis Supabase.
+  ///    Si ça réussit, on met à jour les infos et on re-sauve localement.
+  ///    Si ça échoue (réseau, session expirée, etc.), on garde la session
+  ///    locale — l'utilisateur reste connecté.
+  /// 3. Seul un appel explicite à [logoutUser] efface les données locales.
   Future<void> checkAuthStatus() async {
     state = state.copyWith(status: AuthStatus.loading);
 
     try {
-      final loggedIn = await _isLoggedIn();
+      // 1) Source de vérité = stockage local
+      final localResult = await _getUserLocally();
 
+      User? localUser;
+      localResult.fold((_) => localUser = null, (u) => localUser = u);
+
+      if (localUser != null) {
+        // Utilisateur trouvé localement → on le considère connecté tout de suite
+        state = AuthState(
+          status: AuthStatus.authenticated,
+          user: localUser,
+        );
+
+        // 2) Rafraîchissement silencieux en arrière-plan
+        _refreshSilently();
+        return;
+      }
+
+      // 2b) Pas de user local : on tente quand même Supabase (cas premier
+      // lancement après login natif)
+      final loggedIn = await _isLoggedIn();
       if (loggedIn) {
         final result = await _getCurrentUser();
         result.fold(
           (failure) {
-            state = state.copyWith(
-              status: AuthStatus.unauthenticated,
-              errorMessage: failure.message,
-            );
-          },
-          (user) {
-            state = state.copyWith(
-              status: AuthStatus.authenticated,
-              user: user,
-            );
-          },
-        );
-      } else {
-        // Vérifier les données locales
-        final localResult = await _getUserLocally();
-        localResult.fold(
-          (_) {
             state = const AuthState(status: AuthStatus.unauthenticated);
           },
-          (user) {
+          (user) async {
+            await _saveUserLocally(user); // on persiste pour la prochaine fois
             state = AuthState(
               status: AuthStatus.authenticated,
               user: user,
             );
           },
         );
+      } else {
+        state = const AuthState(status: AuthStatus.unauthenticated);
       }
-    } catch (e) {
-      state = AuthState(
-        status: AuthStatus.error,
-        errorMessage: e.toString(),
+    } catch (_) {
+      // En cas d'erreur inattendue, on ne déconnecte PAS l'utilisateur
+      // s'il avait déjà une session locale.
+      if (state.user != null) {
+        state = state.copyWith(status: AuthStatus.authenticated);
+      } else {
+        state = const AuthState(status: AuthStatus.unauthenticated);
+      }
+    }
+  }
+
+  /// Rafraîchit le profil sans jamais déconnecter l'utilisateur en cas d'échec.
+  Future<void> _refreshSilently() async {
+    try {
+      final result = await _getCurrentUser();
+      result.fold(
+        (_) {}, // échec silencieux : on garde la session locale
+        (user) async {
+          await _saveUserLocally(user);
+          state = state.copyWith(user: user);
+        },
       );
+    } catch (_) {
+      // ignore
     }
   }
 
@@ -137,7 +165,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
         status: AuthStatus.authenticated,
         user: user,
       );
-    } catch (e) {
+    } catch (_) {
       state = const AuthState(
         status: AuthStatus.error,
         errorMessage: 'Erreur lors de la connexion',
@@ -145,7 +173,7 @@ class AuthNotifier extends StateNotifier<AuthState> {
     }
   }
 
-  /// Déconnecte l'utilisateur
+  /// Déconnecte l'utilisateur (seul moyen de perdre la session)
   Future<void> logoutUser() async {
     state = state.copyWith(status: AuthStatus.loading);
 
@@ -154,16 +182,16 @@ class AuthNotifier extends StateNotifier<AuthState> {
       await _clearUserLocally();
 
       state = const AuthState(status: AuthStatus.unauthenticated);
-    } catch (e) {
-      state = const AuthState(
-        status: AuthStatus.error,
-        errorMessage: 'Erreur lors de la déconnexion',
-      );
+    } catch (_) {
+      // Même en cas d'erreur réseau, on force la déconnexion locale
+      await _clearUserLocally();
+      state = const AuthState(status: AuthStatus.unauthenticated);
     }
   }
 
-  /// Met à jour l'utilisateur dans le state
+  /// Met à jour l'utilisateur dans le state ET en local
   Future<void> updateUser(User user) async {
+    await _saveUserLocally(user);
     state = state.copyWith(user: user);
   }
 
@@ -172,15 +200,15 @@ class AuthNotifier extends StateNotifier<AuthState> {
     try {
       final result = await _getCurrentUser();
       result.fold(
-        (_) {}, // Silencieux en cas d'échec, on garde l'état actuel
-        (user) {
+        (_) {},
+        (user) async {
+          await _saveUserLocally(user);
           state = state.copyWith(user: user);
         },
       );
     } catch (_) {}
   }
 
-  /// Réinitialise l'état
   void reset() {
     state = const AuthState();
   }
