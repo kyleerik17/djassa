@@ -74,33 +74,27 @@ returns boolean
 language sql
 security definer
 set search_path = public
-as $$
-  select coalesce(
+return coalesce(
     (select p.is_admin from public.profiles p where p.id = auth.uid() limit 1),
     false
   );
-$$;
 
 create or replace function public.is_courier()
 returns boolean
 language sql
 security definer
 set search_path = public
-as $$
-  select coalesce(
+return coalesce(
     (select p.role = 'courier' from public.profiles p where p.id = auth.uid() limit 1),
     false
   );
-$$;
 
 create or replace function public.is_courier_or_admin()
 returns boolean
 language sql
 security definer
 set search_path = public
-as $$
-  select coalesce(public.is_courier(), false) or coalesce(public.is_admin(), false);
-$$;
+return coalesce(public.is_courier(), false) or coalesce(public.is_admin(), false);
 
 -- ---------------------------------------------------------------------------
 -- CATALOGUE
@@ -164,16 +158,6 @@ on public.products
 for all
 using (public.is_admin())
 with check (public.is_admin());
-
-insert into public.categories (name, slug, icon_name, subtitle, items_count, sort_order)
-values
-  ('Electronique', 'electronique', 'electric_bolt', 'Accessoires, gadgets, equipements', 120, 1),
-  ('Maison', 'maison', 'home', 'Decoration, entretien, rangement', 86, 2),
-  ('Mode', 'mode', 'checkroom', 'Vetements, sacs, chaussures', 148, 3),
-  ('Beaute', 'beaute', 'spa', 'Soins, parfums, accessoires', 72, 4),
-  ('Sport', 'sport', 'sports_soccer', 'Equipements et accessoires', 64, 5),
-  ('Divers', 'divers', 'category', 'Autres articles du catalogue', 200, 6)
-on conflict (slug) do nothing;
 
 -- ---------------------------------------------------------------------------
 -- COMMANDES
@@ -286,3 +270,5 @@ on public.notifications
 for all
 using (public.is_admin())
 with check (public.is_admin());
+
+select 'schema_sql_ok' as status;

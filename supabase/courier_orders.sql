@@ -96,6 +96,32 @@ create table if not exists public.courier_order_responses (
 
 alter table public.courier_order_responses enable row level security;
 
+-- Bucket prive pour les documents livreur.
+insert into storage.buckets(id, name, public, file_size_limit, allowed_mime_types)
+values (
+  'courier-documents',
+  'courier-documents',
+  false,
+  5242880,
+  array['image/jpeg', 'image/png', 'image/webp']
+)
+on conflict (id) do update
+set public = excluded.public,
+    file_size_limit = excluded.file_size_limit,
+    allowed_mime_types = excluded.allowed_mime_types;
+
+drop policy if exists "storage_courier_documents_own" on storage.objects;
+create policy "storage_courier_documents_own"
+on storage.objects for all
+using (
+  bucket_id = 'courier-documents'
+  and (public.is_admin() or auth.uid()::text = (storage.foldername(name))[1])
+)
+with check (
+  bucket_id = 'courier-documents'
+  and (public.is_admin() or auth.uid()::text = (storage.foldername(name))[1])
+);
+
 -- 3) RLS: les livreurs voient les commandes disponibles + les leurs.
 drop policy if exists "orders_courier_select_available_or_own" on public.orders;
 create policy "orders_courier_select_available_or_own"
@@ -104,7 +130,7 @@ for select
 using (
   public.is_courier_or_admin()
   and (
-    courier_id is null
+    (courier_id is null and status in ('paid', 'confirmed'))
     or courier_id = auth.uid()
   )
 );
@@ -145,7 +171,7 @@ begin
       end
   where id = p_order_id
     and courier_id is null
-    and status not in ('delivered', 'cancelled');
+    and status in ('paid', 'confirmed');
 
   get diagnostics v_updated_count = row_count;
 

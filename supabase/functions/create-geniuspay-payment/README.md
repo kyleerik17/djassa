@@ -1,21 +1,30 @@
-﻿# Supabase Edge Function: create-payment
+# Supabase Edge Function: create-geniuspay-payment
 
-Cette fonction garde la clé GeniusPay côté backend et crée un paiement depuis une commande existante.
+Creates a GeniusPay payment from an existing order and returns a URL that the
+Flutter app can open in its WebView.
 
-## Secrets à configurer
+## Required secrets
 
 ```bash
-supabase secrets set GENIUSPAY_API_KEY="pk_live_ou_sandbox_xxx"
-# optionnel si l'URL change:
+supabase secrets set GENIUSPAY_API_KEY="pk_live_or_pk_sandbox_xxx"
+supabase secrets set GENIUSPAY_API_SECRET="sk_live_or_sk_sandbox_xxx"
+```
+
+Accepted aliases are `GENIUSPAY_PUBLIC_KEY` for the public key and
+`GENIUSPAY_SECRET_KEY` / `GENIUSPAY_SECRET` for the secret key.
+
+Optional:
+
+```bash
 supabase secrets set GENIUSPAY_BASE_URL="https://geniuspay.ci/api/v1/merchant"
 ```
 
-`SUPABASE_URL` et `SUPABASE_SERVICE_ROLE_KEY` sont fournis automatiquement par Supabase aux Edge Functions.
+`SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` are provided by Supabase at
+runtime.
 
-## Déploiement
+## Deploy
 
 ```bash
-supabase functions deploy create-payment
+supabase functions deploy create-geniuspay-payment
+supabase functions deploy payment-return
 ```
-
-L'app Flutter appelle ensuite `Supabase.instance.client.functions.invoke('create-payment')`.

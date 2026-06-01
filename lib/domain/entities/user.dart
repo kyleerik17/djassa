@@ -46,8 +46,19 @@ class User extends Equatable {
   /// Vrai si ce profil est un livreur.
   bool get isCourier => role == 'courier';
 
+  /// Vrai si ce profil est un vendeur (boutique liée via `structures`).
+  bool get isVendor => role == 'vendor';
+
   /// Vrai si ce profil est un client classique.
   bool get isClient => role == 'client';
+
+  /// Libellé affiché dans l'UI selon le rôle.
+  String get roleLabel => switch (role) {
+        'courier' => 'Livreur',
+        'vendor' => 'Vendeur',
+        'admin' => 'Administrateur',
+        _ => 'Client',
+      };
 
   /// Convertit depuis JSON
   factory User.fromJson(Map<String, dynamic> json) {

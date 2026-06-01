@@ -12,8 +12,7 @@ returns boolean
 language sql
 security definer
 set search_path = public
-as $$
-  select coalesce(
+return coalesce(
     (
       select p.is_admin
       from public.profiles p
@@ -22,7 +21,6 @@ as $$
     ),
     false
   );
-$$;
 
 -- Sécurité: un client connecté ne doit jamais pouvoir se donner is_admin lui-même
 -- via la policy "profiles_update_own" existante.
@@ -31,18 +29,18 @@ returns trigger
 language plpgsql
 security definer
 set search_path = public
-as $$
+as '
 begin
   if auth.uid() is not null
      and old.is_admin is distinct from new.is_admin
      and not public.is_admin()
   then
-    raise exception 'Modification du rôle admin interdite';
+    raise exception ''Modification du role admin interdite'';
   end if;
 
   return new;
 end;
-$$;
+';
 
 drop trigger if exists profiles_prevent_self_admin_escalation on public.profiles;
 create trigger profiles_prevent_self_admin_escalation
@@ -62,7 +60,7 @@ on public.products
 for select
 using (public.is_admin());
 
--- Gestion des rayons si tu ajoutes plus tard un écran admin rayons.
+-- Gestion complète des rayons / catégories depuis le backoffice admin.
 drop policy if exists "categories_admin_insert" on public.categories;
 create policy "categories_admin_insert"
 on public.categories
@@ -110,3 +108,5 @@ using (public.is_admin());
 -- update public.profiles
 -- set is_admin = true
 -- where email = 'ton-email@example.com';
+
+select 'admin_backoffice_sql_ok' as status;

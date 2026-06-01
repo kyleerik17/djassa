@@ -24,6 +24,8 @@ class AppConstants {
   static const String supportRoute = '/support';
   static const String adminRoute = '/admin';
   static const String courierRoute = '/courier';
+  static const String vendorRoute = '/vendor';
+  static const String vendorAccountRoute = '/vendor/account';
 
   // Storage Keys
   static const String tokenKey = 'auth_token';
@@ -40,16 +42,6 @@ class AppConstants {
   // Pagination
   static const int defaultPageSize = 20;
   static const int maxPageSize = 100;
-
-  // Categories
-  static const List<String> mainCategories = [
-    "Beauté",
-    "Maison",
-    "Mode",
-    "Homme",
-    "Femme",
-    "Sport",
-  ];
 
   // Messages d'erreur
   static const String errorNetwork =

@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -76,28 +77,39 @@ class DeliveryTrackingService {
 
   static const LatLng warehousePosition = LatLng(5.3599, -4.0083);
 
+  // ─── Géolocalisation ──────────────────────────────────────────────────────
+
   Future<LatLng?> getCurrentClientPosition() async {
     final position = await _getCurrentPosition();
     if (position == null) return null;
     return LatLng(position.latitude, position.longitude);
   }
 
-  /// Publie en continu la vraie position GPS de l'appareil dans Supabase.
-  ///
-  /// Utilise le role `client` dans l'application client. Le meme flux peut etre
-  /// reutilise cote livreur avec `role: 'courier'` dans l'app/compte livreur.
+  /// Publie en continu la vraie position GPS dans Supabase.
+  /// Le stream s'arrête proprement quand le caller annule son écoute.
   Stream<DeliveryPositionPublishStatus> publishDevicePosition({
     required String orderId,
     required String role,
     int distanceFilterMeters = 12,
   }) async* {
+    // Sur Flutter Web, getPositionStream n'est pas supporté de façon fiable.
+    // On utilise un polling à la place.
+    if (kIsWeb) {
+      yield* _publishWebPolling(
+        orderId: orderId,
+        role: role,
+        intervalSeconds: 15,
+      );
+      return;
+    }
+
     final first = await _getCurrentPosition();
     if (first == null) {
       yield DeliveryPositionPublishStatus(
         role: role,
         updatedAt: DateTime.now(),
         isLive: false,
-        message: 'GPS indisponible ou permission refusee',
+        message: 'GPS indisponible ou permission refusée',
       );
       return;
     }
@@ -129,6 +141,34 @@ class DeliveryTrackingService {
     }
   }
 
+  /// Polling GPS pour Flutter Web (pas de getPositionStream fiable).
+  Stream<DeliveryPositionPublishStatus> _publishWebPolling({
+    required String orderId,
+    required String role,
+    int intervalSeconds = 15,
+  }) async* {
+    while (true) {
+      final position = await _getCurrentPosition();
+      if (position == null) {
+        yield DeliveryPositionPublishStatus(
+          role: role,
+          updatedAt: DateTime.now(),
+          isLive: false,
+          message: 'GPS indisponible sur Web',
+        );
+        // Attendre avant de réessayer — délai plus long si pas de GPS
+        await Future<void>.delayed(Duration(seconds: intervalSeconds * 2));
+      } else {
+        yield await _publishPosition(
+          orderId: orderId,
+          role: role,
+          value: position,
+        );
+        await Future<void>.delayed(Duration(seconds: intervalSeconds));
+      }
+    }
+  }
+
   Future<DeliveryPositionPublishStatus> _publishPosition({
     required String orderId,
     required String role,
@@ -146,35 +186,42 @@ class DeliveryTrackingService {
       isLive: synced,
       position: point,
       message: synced
-          ? 'Position GPS synchronisee'
+          ? 'Position GPS synchronisée'
           : 'GPS lu, synchronisation Supabase impossible',
     );
   }
 
   Future<Position?> _getCurrentPosition() async {
-    try {
-      final enabled = await Geolocator.isLocationServiceEnabled();
-      if (!enabled) return null;
+  // Sur Web, la géolocalisation cause des assertions en boucle
+  // sur HTTP ou quand le navigateur n'est pas prêt.
+  // On désactive complètement sur Web pour éviter la boucle.
+  if (kIsWeb) return null;
 
-      var permission = await Geolocator.checkPermission();
-      if (permission == LocationPermission.denied) {
-        permission = await Geolocator.requestPermission();
-      }
-      if (permission == LocationPermission.denied ||
-          permission == LocationPermission.deniedForever) {
-        return null;
-      }
+  try {
+    final enabled = await Geolocator.isLocationServiceEnabled();
+    if (!enabled) return null;
 
-      return await Geolocator.getCurrentPosition(
-        locationSettings: const LocationSettings(
-          accuracy: LocationAccuracy.high,
-          timeLimit: Duration(seconds: 8),
-        ),
-      );
-    } catch (_) {
+    var permission = await Geolocator.checkPermission();
+    if (permission == LocationPermission.denied) {
+      permission = await Geolocator.requestPermission();
+    }
+    if (permission == LocationPermission.denied ||
+        permission == LocationPermission.deniedForever) {
       return null;
     }
+
+    return await Geolocator.getCurrentPosition(
+      locationSettings: const LocationSettings(
+        accuracy: LocationAccuracy.high,
+        timeLimit: Duration(seconds: 8),
+      ),
+    );
+  } catch (e) {
+    debugPrint('[DeliveryTrackingService] GPS: $e');
+    return null;
   }
+}
+  // ─── Supabase positions ───────────────────────────────────────────────────
 
   Future<bool> upsertPosition({
     required String orderId,
@@ -194,26 +241,39 @@ class DeliveryTrackingService {
       );
       return true;
     } catch (_) {
-      // La table/policy peut ne pas encore exister en dev : l'app garde un fallback.
       return false;
     }
   }
 
+  // ─── Watch order (realtime + fallback polling annulable) ──────────────────
+
   Stream<DeliveryLiveSnapshot> watchOrder(DeliveryTrackingQuery query) async* {
+    // Snapshot initial immédiat
     yield await _fetchSnapshot(query);
+
+    bool realtimeActive = false;
 
     try {
       await for (final rows in _client
           .from('delivery_locations')
           .stream(primaryKey: ['id']).eq('order_id', query.orderId)) {
+        realtimeActive = true;
         yield _snapshotFromRows(rows, query);
       }
     } catch (_) {
-      // Fallback polling si le realtime Supabase n'est pas active ou si la
-      // table n'a pas encore ete ajoutee a la publication supabase_realtime.
+      // Realtime indisponible → fallback polling avec compteur d'arrêt
+      debugPrint(
+        '[DeliveryTrackingService] Realtime indisponible, '
+        'passage en polling toutes les 10s',
+      );
+    }
+
+    // ✅ Polling de secours — annulable car c'est un générateur async*
+    // Le caller peut annuler en faisant streamSubscription.cancel()
+    if (!realtimeActive) {
       while (true) {
+        await Future<void>.delayed(const Duration(seconds: 10));
         yield await _fetchSnapshot(query);
-        await Future<void>.delayed(const Duration(seconds: 8));
       }
     }
   }
@@ -239,6 +299,7 @@ class DeliveryTrackingService {
   ) {
     DeliveryLivePoint? client;
     DeliveryLivePoint? courier;
+
     for (final row in rows) {
       final json = Map<String, dynamic>.from(row as Map);
       final point = _pointFromJson(json);
@@ -292,6 +353,8 @@ class DeliveryTrackingService {
     );
   }
 
+  // ─── Géocodage approximatif Abidjan ───────────────────────────────────────
+
   static LatLng approximateAddressPosition(String address) {
     final lower = address.toLowerCase();
     if (lower.contains('abobo')) return const LatLng(5.4300, -4.0200);
@@ -307,8 +370,10 @@ class DeliveryTrackingService {
     if (lower.contains('anyama')) return const LatLng(5.4940, -4.0510);
     if (lower.contains('songon')) return const LatLng(5.3190, -4.2500);
     if (lower.contains('grand-bassam')) return const LatLng(5.2118, -3.7388);
-    return const LatLng(5.3364, -4.0267);
+    return const LatLng(5.3364, -4.0267); // Centre Abidjan
   }
+
+  // ─── Helpers ──────────────────────────────────────────────────────────────
 
   DeliveryLivePoint? _pointFromJson(Map<String, dynamic> json) {
     final latitude = double.tryParse('${json['latitude']}');

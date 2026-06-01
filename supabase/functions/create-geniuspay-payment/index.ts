@@ -1,12 +1,19 @@
-﻿// @ts-ignore: Deno types provided at runtime by Supabase Edge Functions
-// @ts-ignore: esm.sh imports resolved at runtime
+// @ts-ignore: Deno types are provided at runtime by Supabase Edge Functions.
+// @ts-ignore: esm.sh imports are resolved at runtime by Supabase Edge Functions.
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Headers':
+    'authorization, x-client-info, apikey, content-type',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 }
+
+const OFFICIAL_GENIUSPAY_BASE_URL = 'https://geniuspay.ci/api/v1/merchant'
+
+// @ts-ignore: Deno.env is available at runtime.
+const env = (name: string): string | undefined => Deno.env.get(name) ??
+  undefined
 
 type PaymentRequest = {
   order_id?: string
@@ -15,252 +22,399 @@ type PaymentRequest = {
   customer_name?: string
 }
 
-type PaymentResponse = {
-  checkout_url: string
-  reference: string
-  payment_id?: string
-}
-
-function jsonResponse(body: Record<string, unknown>, status = 200): Response {
+function json(body: Record<string, unknown>, status = 200): Response {
   return new Response(JSON.stringify(body), {
     status,
-    headers: {
-      ...corsHeaders,
-      'Content-Type': 'application/json',
-    },
+    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
   })
 }
 
-// @ts-ignore: Deno.serve is available at runtime in Supabase Edge Functions
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === 'object'
+    ? value as Record<string, unknown>
+    : null
+}
+
+function stringValue(value: unknown): string | null {
+  if (typeof value === 'string') {
+    const trimmed = value.trim()
+    return trimmed.length > 0 ? trimmed : null
+  }
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return String(value)
+  }
+  return null
+}
+
+function pickString(
+  source: Record<string, unknown>,
+  keys: string[],
+): string | null {
+  for (const key of keys) {
+    const value = stringValue(source[key])
+    if (value) return value
+  }
+  return null
+}
+
+function normalizeBaseUrl(value: string | undefined): string {
+  const raw = (value ?? OFFICIAL_GENIUSPAY_BASE_URL).trim()
+  let url = raw || OFFICIAL_GENIUSPAY_BASE_URL
+
+  // Older snippets used pay.genius.ci, which now returns "not found".
+  url = url.replace('https://pay.genius.ci', 'https://geniuspay.ci')
+  url = url.replace('http://pay.genius.ci', 'https://geniuspay.ci')
+  url = url.replace(/\/+$/, '')
+
+  if (url === 'https://geniuspay.ci') {
+    return OFFICIAL_GENIUSPAY_BASE_URL
+  }
+
+  return url
+}
+
+function functionsBaseUrl(req: Request, supabaseUrl: string): string {
+  const explicit = (env('SUPABASE_FUNCTIONS_URL') ??
+    env('SUPABASE_FUNCTION_URL') ??
+    '').trim()
+
+  if (explicit) return explicit.replace(/\/+$/, '')
+
+  try {
+    const url = new URL(req.url)
+    url.protocol = 'https:'
+    return `${url.origin}/functions/v1`
+  } catch {
+    return `${supabaseUrl.replace(/\/+$/, '').replace(/^http:/, 'https:')}/functions/v1`
+  }
+}
+
+function paymentReturnUrl(
+  functionsUrl: string,
+  status: 'success' | 'failed',
+  orderId: string,
+): string {
+  const url = new URL(`${functionsUrl}/payment-return/${orderId}`)
+  url.searchParams.set('status', status)
+  url.searchParams.set('order_id', orderId)
+  return url.toString()
+}
+
+function withReturnParams(
+  rawUrl: string,
+  status: 'success' | 'failed',
+  orderId: string,
+): string {
+  try {
+    const url = new URL(rawUrl)
+    url.protocol = 'https:'
+    if (!url.pathname.endsWith(`/${orderId}`)) {
+      url.pathname = `${url.pathname.replace(/\/+$/, '')}/${orderId}`
+    }
+    if (!url.searchParams.get('status')) {
+      url.searchParams.set('status', status)
+    }
+    url.searchParams.set('order_id', orderId)
+    return url.toString()
+  } catch {
+    return rawUrl
+  }
+}
+
+function normalizeProvider(provider: string): string {
+  const normalized = provider.trim().toLowerCase()
+  const allowed = new Set([
+    'wave',
+    'orange_money',
+    'moov_money',
+    'mtn_money',
+    'geniuspay',
+  ])
+  return allowed.has(normalized) ? normalized : 'geniuspay'
+}
+
+function providerRouting(provider: string): Record<string, string> {
+  switch (provider) {
+    case 'wave':
+      return { payment_method: 'wave' }
+    case 'orange_money':
+      return { payment_method: 'orange_money' }
+    case 'mtn_money':
+      return { payment_method: 'mtn_money' }
+    case 'moov_money':
+      return { gateway: 'moov_money' }
+    default:
+      return {}
+  }
+}
+
+async function readJsonBody(req: Request): Promise<PaymentRequest | null> {
+  try {
+    return await req.json() as PaymentRequest
+  } catch {
+    return null
+  }
+}
+
+// @ts-ignore: Deno.serve is available at runtime in Supabase Edge Functions.
 Deno.serve(async (req: Request): Promise<Response> => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
   }
 
   if (req.method !== 'POST') {
-    return jsonResponse({ error: 'Méthode non autorisée' }, 405)
+    return json({ error: 'Method not allowed' }, 405)
   }
 
   try {
-    // 🔐 1. Configuration environnementale
-    // @ts-ignore
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')
-    // @ts-ignore
-    const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
-    // @ts-ignore
-    const geniusApiKey = Deno.env.get('GENIUSPAY_API_KEY')
-    // @ts-ignore
-    const geniusBaseUrl = Deno.env.get('GENIUSPAY_BASE_URL') ?? 'https://geniuspay.ci/api/v1/merchant'
-    // @ts-ignore
-    const functionsUrl = Deno.env.get('SUPABASE_FUNCTION_URL') ?? ''
+    const supabaseUrl = env('SUPABASE_URL')
+    const serviceKey = env('SUPABASE_SERVICE_ROLE_KEY')
+    // Public key, for example pk_live_xxx or pk_sandbox_xxx.
+    const geniusApiKey = env('GENIUSPAY_API_KEY') ??
+      env('GENIUSPAY_PUBLIC_KEY') ??
+      env('GENIUSPAY_PUBLIC')
+    // Secret key, for example sk_live_xxx or sk_sandbox_xxx.
+    const geniusApiSecret = env('GENIUSPAY_API_SECRET') ??
+      env('GENIUSPAY_SECRET_KEY') ??
+      env('GENIUSPAY_SECRET') ??
+      env('GENIUSPAY_API_SECRETE')
+    const baseUrl = normalizeBaseUrl(env('GENIUSPAY_BASE_URL'))
 
-    if (!supabaseUrl || !serviceRoleKey) {
-      console.error('❌ Configuration Supabase manquante')
-      return jsonResponse({ error: 'Configuration serveur invalide' }, 500)
+    if (!supabaseUrl || !serviceKey) {
+      return json({ error: 'Server misconfigured' }, 500)
     }
 
-    if (!geniusApiKey) {
-      console.error('❌ GENIUSPAY_API_KEY manquante')
-      return jsonResponse({ error: 'Configuration paiement invalide' }, 500)
+    if (!geniusApiKey || !geniusApiSecret) {
+      const missingCredentials = [
+        ...(!geniusApiKey ? ['GENIUSPAY_API_KEY'] : []),
+        ...(!geniusApiSecret ? ['GENIUSPAY_API_SECRET'] : []),
+      ]
+      return json({
+        error: 'GeniusPay credentials missing',
+        missing: missingCredentials,
+      }, 500)
     }
 
-    // 🔐 2. Vérification authentification
-    const authHeader = req.headers.get('Authorization') ?? ''
-    const token = authHeader.replace('Bearer ', '').trim()
-    
-    if (!token) {
-      return jsonResponse({ error: 'Utilisateur non authentifié' }, 401)
-    }
+    const supabase = createClient(supabaseUrl, serviceKey)
 
-    const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey)
-    
-    const { data: authData, error: authError } = await supabaseAdmin.auth.getUser(token)
-    if (authError || !authData?.user) {
-      console.warn('⚠️ Session invalide:', authError?.message)
-      return jsonResponse({ error: 'Session invalide ou expirée' }, 401)
-    }
+    const token = req.headers.get('Authorization')?.replace('Bearer ', '')
+      .trim()
+    if (!token) return json({ error: 'Unauthorized' }, 401)
 
-    const userId = authData.user.id
-    console.log('✅ Utilisateur authentifié:', userId)
+    const { data: userData, error: userError } = await supabase.auth.getUser(
+      token,
+    )
+    const user = userData?.user
+    if (userError || !user) return json({ error: 'Invalid session' }, 401)
 
-    // 📥 3. Parsing inputs
-    let body: PaymentRequest
-    try {
-      body = await (req.json() as Promise<PaymentRequest>)
-    } catch {
-      return jsonResponse({ error: 'Corps de la requête invalide' }, 400)
-    }
+    const body = await readJsonBody(req)
+    if (!body) return json({ error: 'Invalid body' }, 400)
 
-    const { order_id, provider, customer_phone, customer_name } = body
+    const orderId = body.order_id?.trim()
+    const provider = normalizeProvider(body.provider ?? '')
+    const customerPhone = body.customer_phone?.replace(/\s+/g, '').trim()
+    const customerName = body.customer_name?.trim()
 
-    if (!order_id || !provider || !customer_phone) {
-      return jsonResponse({
-        error: 'Champs requis manquants',
+    if (!orderId || !body.provider || !customerPhone) {
+      return json({
+        error: 'Missing fields',
         required: ['order_id', 'provider', 'customer_phone'],
       }, 400)
     }
 
-    // 🔍 4. Vérification commande
-    const { data: order, error: orderError } = await supabaseAdmin
+    const { data: order, error: orderError } = await supabase
       .from('orders')
       .select('id, user_id, total, status')
-      .eq('id', order_id)
+      .eq('id', orderId)
       .single()
 
-    if (orderError || !order) {
-      console.warn('⚠️ Commande introuvable:', order_id)
-      return jsonResponse({ error: 'Commande introuvable' }, 404)
-    }
+    if (orderError || !order) return json({ error: 'Order not found' }, 404)
+    if (order.user_id !== user.id) return json({ error: 'Forbidden' }, 403)
 
-    if (order.user_id !== userId) {
-      console.warn('⚠️ Accès refusé:', { order_id, userId })
-      return jsonResponse({ error: 'Accès refusé à cette commande' }, 403)
-    }
-
-    if (order.status !== 'pending' && order.status !== 'confirmed' && order.status !== 'pending_payment') {
-      return jsonResponse({ 
-        error: 'Cette commande ne peut plus être payée',
-        current_status: order.status 
-      }, 400)
-    }
-
-    // 🛡️ 5. Montant sécurisé depuis DB
     const amount = Number(order.total)
-    if (!Number.isFinite(amount) || amount <= 0) {
-      return jsonResponse({ error: 'Montant de commande invalide' }, 400)
+    const amountXof = Math.floor(amount)
+    if (!Number.isFinite(amount) || amountXof < 200) {
+      return json({ error: 'Invalid amount', min_amount: 200 }, 400)
     }
 
-    console.log('📦 Création paiement:', { order_id, amount, provider })
+    const functionsUrl = functionsBaseUrl(req, supabaseUrl)
+    const successUrl = env('GENIUSPAY_SUCCESS_URL')
+      ? withReturnParams(env('GENIUSPAY_SUCCESS_URL')!, 'success', orderId)
+      : paymentReturnUrl(functionsUrl, 'success', orderId)
+    const errorUrl = env('GENIUSPAY_ERROR_URL')
+      ? withReturnParams(env('GENIUSPAY_ERROR_URL')!, 'failed', orderId)
+      : paymentReturnUrl(functionsUrl, 'failed', orderId)
+    const forceProvider = env('GENIUSPAY_FORCE_PROVIDER') === 'true'
 
-    // 💳 6. Appel API GeniusPay
-    const geniusPayload = {
-      amount: Math.floor(amount),
+    const payload: Record<string, unknown> = {
+      amount: amountXof,
       currency: 'XOF',
-      description: `Commande Djassa #${order_id.slice(0, 8)}`,
+      description: `Commande Djassa #${orderId.slice(0, 8)}`,
+      external_reference: orderId,
+      success_url: successUrl,
+      error_url: errorUrl,
+      webhook_url: `${functionsUrl}/payment-webhook`,
       metadata: {
-        order_id: order_id,
-        user_id: userId,
-        platform: 'flutter',
+        order_id: orderId,
+        user_id: user.id,
+        provider,
       },
       customer: {
-        ...(customer_name ? { name: customer_name } : {}),
-        phone: customer_phone,
+        phone: customerPhone,
+        country: customerPhone.startsWith('+225') ? 'CI' : undefined,
+        ...(customerName ? { name: customerName } : {}),
       },
-      webhook_url: `${functionsUrl}/payment-webhook`,
-      return_url: 'djassaapp://payment-callback',
     }
 
-    const geniusResponse = await fetch(`${geniusBaseUrl}/payments`, {
+    // Hosted checkout is the default and returns checkout_url. Set
+    // GENIUSPAY_FORCE_PROVIDER=true only if the merchant account accepts direct
+    // provider routing for the selected operator.
+    if (forceProvider) {
+      Object.assign(payload, providerRouting(provider))
+    }
+
+    const headers: Record<string, string> = {
+      'X-API-Key': geniusApiKey,
+      'Content-Type': 'application/json',
+      'Accept': 'application/json',
+      'X-API-Secret': geniusApiSecret,
+    }
+
+    const geniusResponse = await fetch(`${baseUrl}/payments`, {
       method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${geniusApiKey}`,
-        'Content-Type': 'application/json',
-        'Accept': 'application/json',
-      },
-      body: JSON.stringify(geniusPayload),
+      headers,
+      body: JSON.stringify(payload),
     })
 
-    const geniusBodyText = await geniusResponse.text()
-    let geniusBody: Record<string, unknown>
-    
+    const raw = await geniusResponse.text()
+    let parsed: Record<string, unknown> = { raw }
     try {
-      geniusBody = JSON.parse(geniusBodyText)
+      parsed = JSON.parse(raw)
     } catch {
-      geniusBody = { raw: geniusBodyText }
+      // Keep raw body for logs and controlled error payload below.
     }
+
+    console.log('GeniusPay create payment', {
+      url: `${baseUrl}/payments`,
+      status: geniusResponse.status,
+      body: parsed,
+    })
 
     if (!geniusResponse.ok) {
-      console.error('❌ Erreur GeniusPay:', { status: geniusResponse.status, body: geniusBody })
-      return jsonResponse({
-        error: 'Échec de la création du paiement',
-        status: geniusResponse.status,
-        details: geniusBody.message || geniusBody.error || 'Erreur GeniusPay',
+      return json({
+        error: 'GeniusPay payment creation failed',
+        message: asRecord(parsed.error)?.message ??
+          stringValue(parsed.message) ??
+          stringValue(parsed.error) ??
+          'Payment service unavailable',
+        genius_status: geniusResponse.status,
       }, 502)
     }
 
-    // 🎯 7. Extraction réponse (✅ FIX: notation par crochets)
-    const responseData = (geniusBody.data ?? geniusBody) as Record<string, unknown>
-    
-    // ✅ Accès sécurisé aux propriétés avec notation [key]
-    const checkoutUrl = typeof responseData['checkout_url'] === 'string' 
-      ? responseData['checkout_url'] as string
-      : ''
-    
-    const reference = typeof responseData['reference'] === 'string'
-      ? responseData['reference'] as string
-      : typeof responseData['transaction_id'] === 'string'
-        ? responseData['transaction_id'] as string
-        : `PAY-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
-
-    const providerPaymentId = typeof responseData['id'] === 'string'
-      ? responseData['id'] as string
-      : typeof responseData['transaction_id'] === 'string'
-        ? responseData['transaction_id'] as string
-        : null
+    const data = asRecord(parsed.data) ?? parsed
+    const checkoutUrl = pickString(data, [
+      'checkout_url',
+      'payment_url',
+      'redirect_url',
+      'url',
+    ])
+    const reference = pickString(data, [
+      'reference',
+      'transaction_id',
+      'payment_reference',
+      'id',
+    ]) ?? `PAY-${Date.now()}`
+    const providerPaymentId = pickString(data, [
+      'id',
+      'transaction_id',
+      'payment_id',
+    ])
 
     if (!checkoutUrl) {
-      console.error('❌ checkout_url manquante:', geniusBody)
-      return jsonResponse({
-        error: 'Configuration GeniusPay invalide',
-        details: 'Aucune URL de paiement retournée',
+      return json({
+        error: 'Payment URL missing',
+        message: 'GeniusPay did not return checkout_url or payment_url.',
+        genius_status: geniusResponse.status,
       }, 502)
     }
 
-    // 🗄️ 8. Enregistrement paiement
-    const { data: payment, error: paymentError } = await supabaseAdmin
+    const richPayment = {
+      order_id: orderId,
+      user_id: user.id,
+      provider,
+      phone: customerPhone,
+      reference,
+      provider_payment_id: providerPaymentId,
+      amount: amountXof,
+      status: 'pending',
+      checkout_url: checkoutUrl,
+      webhook_url: `${functionsUrl}/payment-webhook`,
+      metadata: {
+        order_id: orderId,
+        user_id: user.id,
+        provider,
+        customer_name: customerName ?? null,
+        geniuspay: data,
+      },
+    }
+
+    const minimalPayment = {
+      order_id: orderId,
+      user_id: user.id,
+      provider,
+      phone: customerPhone,
+      reference,
+      amount: amountXof,
+      status: 'pending',
+    }
+
+    let { data: payment, error: paymentError } = await supabase
       .from('payments')
-      .insert({
-        order_id: order_id,
-        user_id: userId,
-        provider: provider,
-        phone: customer_phone,
-        reference: reference,
-        provider_payment_id: providerPaymentId,
-        amount: amount,
-        status: 'pending',
-        checkout_url: checkoutUrl,
-        webhook_url: `${functionsUrl}/payment-webhook`,
-        metadata: {
-          order_id: order_id,
-          user_id: userId,
-          provider: provider,
-          customer_name: customer_name,
-          created_via: 'edge_function',
-        },
-      })
+      .insert(richPayment)
       .select('id')
       .single()
 
     if (paymentError) {
-      console.error('❌ Échec sauvegarde:', paymentError)
-      return jsonResponse({
-        warning: 'Paiement créé mais enregistrement partiel',
+      console.warn('Rich payment insert failed, retrying minimal insert', {
+        code: paymentError.code,
+        message: paymentError.message,
+      })
+
+      const fallback = await supabase
+        .from('payments')
+        .insert(minimalPayment)
+        .select('id')
+        .single()
+
+      payment = fallback.data
+      paymentError = fallback.error
+    }
+
+    if (paymentError) {
+      return json({
+        error: 'Payment created but database save failed',
+        message: paymentError.message,
         checkout_url: checkoutUrl,
-        reference: reference,
-        error: paymentError.message,
+        reference,
+        amount: amountXof,
+        provider,
       }, 202)
     }
 
-    console.log('✅ Paiement enregistré:', { reference })
-
-    // 🎉 9. Réponse finale
-    return jsonResponse({
+    return json({
+      success: true,
+      status: 'pending',
       checkout_url: checkoutUrl,
-      reference: reference,
+      payment_url: checkoutUrl,
+      reference,
       payment_id: payment?.id,
-      amount: amount,
-      provider: provider,
-    } as PaymentResponse & { amount: number; provider: string })
-
-  } catch (error: unknown) {
-    console.error('💥 Exception Edge Function:', {
-      name: error instanceof Error ? error.name : 'Unknown',
-      message: error instanceof Error ? error.message : String(error),
+      amount: amountXof,
+      provider,
     })
-    
-    return jsonResponse({
-      error: 'Erreur serveur lors de la création du paiement',
-      message: error instanceof Error ? error.message : 'Erreur inconnue',
+  } catch (error) {
+    return json({
+      error: 'Server error',
+      message: error instanceof Error ? error.message : String(error),
     }, 500)
   }
 })

@@ -1,13 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+
 import '../../../core/theme/djassa_theme.dart';
+import '../../../core/utils/user_role.dart';
+import '../../../domain/entities/user.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/core_providers.dart';
-import '../../widgets/buttons/djassa_button.dart';
-import '../../../domain/entities/user.dart';
 
-/// Écran de connexion Djassa
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
 
@@ -38,7 +38,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     super.dispose();
   }
 
-  void _handleLogin() async {
+  Future<void> _handleLogin() async {
     if (!_formKey.currentState!.validate()) return;
 
     final authNotifier = ref.read(authNotifierProvider.notifier);
@@ -51,14 +51,13 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
     result.fold(
       (failure) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(failure.message),
-              backgroundColor: Colors.red,
-            ),
-          );
-        }
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(failure.message),
+            backgroundColor: Colors.red,
+          ),
+        );
       },
       (data) async {
         final loadedUser = data['user'];
@@ -68,18 +67,17 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                 id: data['id'] ?? '1',
                 name: data['name'] ?? 'Utilisateur',
                 surname: data['surname'] ?? '',
-                phone: data['phone'] ?? (_isPhone(identifier) ? identifier : ''),
-                email: data['email'] ?? (_isEmail(identifier) ? identifier : null),
+                phone:
+                    data['phone'] ?? (_isPhone(identifier) ? identifier : ''),
+                email:
+                    data['email'] ?? (_isEmail(identifier) ? identifier : null),
                 isVerified: data['is_verified'] ?? false,
                 role: data['role'] ?? 'client',
                 createdAt: DateTime.now(),
               );
 
         await authNotifier.loginUser(user);
-
-        if (mounted) {
-          context.go(user.isCourier ? '/courier' : '/home');
-        }
+        if (mounted) context.go(UserRole.homeRoute(user));
       },
     );
   }
@@ -89,199 +87,211 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     final authState = ref.watch(authNotifierProvider);
 
     return Scaffold(
+      backgroundColor: DjassaTheme.primaryBlack,
       body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(24.0),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              // Logo et titre
-              Column(
-                children: [
-                  Container(
-                    width: 80,
-                    height: 80,
-                    decoration: BoxDecoration(
-                      color: DjassaTheme.accentOrange,
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    child: const Icon(
-                      Icons.directions_car,
-                      size: 40,
-                      color: Colors.white,
-                    ),
-                  ),
-                  const SizedBox(height: 24),
-                  Text(
-                    'Djassa',
-                    style: Theme.of(context).textTheme.displaySmall?.copyWith(
-                          fontFamily: 'Hemi Head',
-                        ),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Pièces détachées automobiles premium',
-                    style: Theme.of(context).textTheme.bodyMedium,
-                    textAlign: TextAlign.center,
-                  ),
-                ],
-              ),
-
-              const SizedBox(height: 48),
-
-              // Formulaire de connexion
-              Form(
-                key: _formKey,
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            return SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(22, 28, 22, 18),
+              child: ConstrainedBox(
+                constraints: BoxConstraints(minHeight: constraints.maxHeight),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    // Champ e-mail ou téléphone
-                    TextFormField(
-                      controller: _identifierController,
-                      keyboardType: TextInputType.emailAddress,
-                      decoration: const InputDecoration(
-                        labelText: 'E-mail ou numéro de téléphone',
-                        prefixIcon: Icon(Icons.person_outline),
-                      ),
-                      validator: (value) {
-                        if (value == null || value.trim().isEmpty) {
-                          return 'Veuillez entrer votre e-mail ou numéro de téléphone';
-                        }
-                        final v = value.trim();
-                        if (!_isEmail(v) && !_isPhone(v)) {
-                          return 'E-mail ou numéro de téléphone invalide';
-                        }
-                        return null;
-                      },
-                    ),
-
-                    const SizedBox(height: 16),
-
-                    // Champ mot de passe
-                    TextFormField(
-                      controller: _passwordController,
-                      obscureText: _obscurePassword,
-                      decoration: InputDecoration(
-                        labelText: 'Mot de passe',
-                        prefixIcon: const Icon(Icons.lock_outline),
-                        suffixIcon: IconButton(
-                          icon: Icon(
-                            _obscurePassword
-                                ? Icons.visibility_outlined
-                                : Icons.visibility_off_outlined,
+                    const SizedBox(height: 54),
+                    Text(
+                      'Djassa',
+                      textAlign: TextAlign.center,
+                      style: Theme.of(context).textTheme.displayLarge?.copyWith(
+                            color: DjassaTheme.primaryWhite,
+                            fontSize: 48,
+                            fontFamily: 'Hemi Head',
                           ),
-                          onPressed: () {
-                            setState(() {
-                              _obscurePassword = !_obscurePassword;
-                            });
-                          },
-                        ),
-                      ),
-                      validator: (value) {
-                        if (value == null || value.isEmpty) {
-                          return 'Veuillez entrer votre mot de passe';
-                        }
-                        if (value.length < 6) {
-                          return 'Le mot de passe doit contenir au moins 6 caractères';
-                        }
-                        return null;
-                      },
                     ),
-
                     const SizedBox(height: 12),
-
-                    // Mot de passe oublié
-                    Align(
-                      alignment: Alignment.centerRight,
-                      child: TextButton(
-                        onPressed: () {
-                          // TODO: Navigation vers réinitialisation
-                        },
-                        child: const Text('Mot de passe oublié ?'),
+                    Text(
+                      'Achetez. Vendez. Partout\nen Cote d Ivoire.',
+                      textAlign: TextAlign.center,
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                            color: DjassaTheme.accentOrange,
+                            fontWeight: FontWeight.w800,
+                          ),
+                    ),
+                    const SizedBox(height: 34),
+                    Container(
+                      padding: const EdgeInsets.all(18),
+                      decoration: BoxDecoration(
+                        color: DjassaTheme.primaryWhite,
+                        borderRadius: BorderRadius.circular(18),
                       ),
-                    ),
-
-                    const SizedBox(height: 24),
-
-                    // Bouton de connexion
-                    DjassaButton(
-                      text: 'Se connecter',
-                      isLoading: authState.isLoading,
-                      onPressed: _handleLogin,
-                    ),
-
-                    const SizedBox(height: 24),
-
-                    // Message d'erreur
-                    if (authState.hasError && authState.errorMessage != null)
-                      Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: Colors.red.shade50,
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: Colors.red.shade200),
-                        ),
-                        child: Row(
+                      child: Form(
+                        key: _formKey,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
                           children: [
-                            Icon(
-                              Icons.error_outline,
-                              color: Colors.red.shade700,
-                              size: 20,
+                            TextFormField(
+                              controller: _identifierController,
+                              keyboardType: TextInputType.emailAddress,
+                              decoration: const InputDecoration(
+                                labelText: 'Numero de telephone',
+                                prefixIcon: Icon(Icons.phone_rounded),
+                                hintText: '+225 07 12 34 56 78',
+                              ),
+                              validator: (value) {
+                                if (value == null || value.trim().isEmpty) {
+                                  return 'Entrez votre e-mail ou telephone';
+                                }
+                                final v = value.trim();
+                                if (!_isEmail(v) && !_isPhone(v)) {
+                                  return 'E-mail ou telephone invalide';
+                                }
+                                return null;
+                              },
                             ),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: Text(
-                                authState.errorMessage!,
-                                style: TextStyle(
-                                  color: Colors.red.shade700,
-                                  fontSize: 14,
+                            const SizedBox(height: 14),
+                            TextFormField(
+                              controller: _passwordController,
+                              obscureText: _obscurePassword,
+                              decoration: InputDecoration(
+                                labelText: 'Mot de passe',
+                                prefixIcon: const Icon(Icons.lock_outline),
+                                suffixIcon: IconButton(
+                                  icon: Icon(
+                                    _obscurePassword
+                                        ? Icons.visibility_outlined
+                                        : Icons.visibility_off_outlined,
+                                  ),
+                                  onPressed: () => setState(
+                                    () => _obscurePassword = !_obscurePassword,
+                                  ),
                                 ),
                               ),
+                              validator: (value) {
+                                if (value == null || value.isEmpty) {
+                                  return 'Entrez votre mot de passe';
+                                }
+                                if (value.length < 6) {
+                                  return 'Minimum 6 caracteres';
+                                }
+                                return null;
+                              },
+                            ),
+                            Align(
+                              alignment: Alignment.centerRight,
+                              child: TextButton(
+                                onPressed: () {},
+                                child: const Text('Mot de passe oublie?'),
+                              ),
+                            ),
+                            const SizedBox(height: 10),
+                            FilledButton(
+                              style: FilledButton.styleFrom(
+                                backgroundColor: DjassaTheme.accentOrange,
+                                padding:
+                                    const EdgeInsets.symmetric(vertical: 16),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                              ),
+                              onPressed:
+                                  authState.isLoading ? null : _handleLogin,
+                              child: authState.isLoading
+                                  ? const SizedBox(
+                                      width: 20,
+                                      height: 20,
+                                      child: CircularProgressIndicator(
+                                        color: Colors.white,
+                                        strokeWidth: 2,
+                                      ),
+                                    )
+                                  : const Text('Se connecter'),
+                            ),
+                            const SizedBox(height: 20),
+                            const _DividerLabel(label: 'ou continuer avec'),
+                            const SizedBox(height: 16),
+                            _SocialButton(
+                              icon: Icons.g_mobiledata_rounded,
+                              label: 'Continuer avec Google',
+                              onTap: () {},
+                            ),
+                            const SizedBox(height: 10),
+                            _SocialButton(
+                              icon: Icons.apple_rounded,
+                              label: 'Continuer avec Apple',
+                              onTap: () {},
+                            ),
+                            const SizedBox(height: 16),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Text(
+                                  'Vous n avez pas de compte?',
+                                  style: Theme.of(context).textTheme.bodySmall,
+                                ),
+                                TextButton(
+                                  onPressed: () => context.go('/register'),
+                                  child: const Text('Creer un compte'),
+                                ),
+                              ],
                             ),
                           ],
                         ),
                       ),
-
-                    const SizedBox(height: 24),
-
-                    // Séparateur
-                    Row(
-                      children: [
-                        const Expanded(child: Divider()),
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 16),
-                          child: Text(
-                            'ou',
-                            style: Theme.of(context).textTheme.bodySmall,
-                          ),
-                        ),
-                        const Expanded(child: Divider()),
-                      ],
-                    ),
-
-                    const SizedBox(height: 24),
-
-                    // Bouton d'inscription
-                    OutlinedButton(
-                      onPressed: () {
-                        context.go('/register');
-                      },
-                      style: OutlinedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                      ),
-                      child: const Text('Créer un compte'),
                     ),
                   ],
                 ),
               ),
-            ],
-          ),
+            );
+          },
         ),
       ),
+    );
+  }
+}
+
+class _DividerLabel extends StatelessWidget {
+  const _DividerLabel({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        const Expanded(child: Divider()),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          child: Text(label, style: Theme.of(context).textTheme.bodySmall),
+        ),
+        const Expanded(child: Divider()),
+      ],
+    );
+  }
+}
+
+class _SocialButton extends StatelessWidget {
+  const _SocialButton({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return OutlinedButton.icon(
+      style: OutlinedButton.styleFrom(
+        side: const BorderSide(color: DjassaTheme.borderMedium),
+        foregroundColor: DjassaTheme.textPrimary,
+        padding: const EdgeInsets.symmetric(vertical: 13),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      ),
+      onPressed: onTap,
+      icon: Icon(icon, size: 24),
+      label: Text(label),
     );
   }
 }

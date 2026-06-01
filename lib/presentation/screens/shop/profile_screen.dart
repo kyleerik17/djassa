@@ -3,8 +3,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/theme/djassa_theme.dart';
+import '../../../domain/order_progress.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/core_providers.dart';
+import '../../widgets/shop/order_progress_celebration.dart';
+import '../../widgets/shop/order_progress_tracker.dart';
+import '../../widgets/shop/payment_ui.dart';
 import '../../widgets/shop/shop_widgets.dart';
 
 class ProfileScreen extends ConsumerStatefulWidget {
@@ -15,6 +19,8 @@ class ProfileScreen extends ConsumerStatefulWidget {
 }
 
 class _ProfileScreenState extends ConsumerState<ProfileScreen> {
+  String? _lastCelebratedStatus;
+
   @override
   void initState() {
     super.initState();
@@ -31,9 +37,33 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
           orElse: () => false,
         );
     final user = authState.user;
-    final isCourier = user?.isCourier ?? false;
-    final hasAvatar = user?.avatarUrl != null && user!.avatarUrl!.isNotEmpty;
+
+    if (user != null && !user.isClient) {
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    final hasAvatar =
+        user?.avatarUrl != null && user!.avatarUrl!.isNotEmpty;
     final savedAddress = ref.watch(savedDeliveryAddressProvider);
+    final savedPayment = ref.watch(savedPaymentMethodProvider);
+    final activeOrderAsync = ref.watch(activeClientOrderProvider);
+
+    ref.listen(activeClientOrderProvider, (previous, next) {
+      final order = next.valueOrNull;
+      if (order == null || !mounted) return;
+      final prevStatus = previous?.valueOrNull?.status;
+      if (!OrderProgressInfo.isProgressForward(prevStatus, order.status)) {
+        return;
+      }
+      if (_lastCelebratedStatus == order.status) return;
+      _lastCelebratedStatus = order.status;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        showOrderProgressCelebration(context, status: order.status);
+      });
+    });
 
     return ShopScaffold(
       currentIndex: 4,
@@ -73,13 +103,22 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                       Text(
                         user?.fullName.trim().isNotEmpty == true
                             ? user!.fullName
-                            : 'Client Djassa',
+                            : user?.roleLabel ?? 'Client Djassa',
                         style: Theme.of(context)
                             .textTheme
                             .titleLarge
                             ?.copyWith(color: DjassaTheme.primaryWhite),
                       ),
                       const SizedBox(height: 4),
+                      Text(
+                        user?.roleLabel ?? 'Client',
+                        style: TextStyle(
+                          color: DjassaTheme.accentOrange.withValues(alpha: .9),
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
                       Text(
                         user?.phone ?? user?.email ?? 'Compte e-commerce',
                         style: TextStyle(
@@ -102,8 +141,20 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
           ),
           const SizedBox(height: 22),
 
-          // ── Actions ───────────────────────────────────────────
-          const SectionTitle(title: 'Mon espace'),
+          if (activeOrderAsync.hasValue && activeOrderAsync.value != null)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 22),
+              child: OrderProgressTracker(
+                order: activeOrderAsync.value!,
+                onStepCelebration: (status) {
+                  if (_lastCelebratedStatus == status) return;
+                  _lastCelebratedStatus = status;
+                  showOrderProgressCelebration(context, status: status);
+                },
+              ),
+            ),
+
+          const SectionTitle(title: 'Mon espace client'),
           const SizedBox(height: 12),
           if (isAdmin)
             _ProfileAction(
@@ -112,30 +163,31 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
               subtitle: 'Ajouter, modifier et publier le catalogue',
               onTap: () => context.go('/admin'),
             ),
-          if (isCourier)
-            _ProfileAction(
-              icon: Icons.delivery_dining_rounded,
-              title: 'Espace livreur',
-              subtitle: 'Nouvelles commandes ? accepter ou refuser',
-              onTap: () => context.go('/courier'),
+          _ProfileAction(
+              icon: Icons.payments_rounded,
+              title: 'Moyen de paiement',
+              subtitle: savedPayment != null && savedPayment.isConfigured
+                  ? '${paymentProviderLabel(savedPayment.provider)} · ${savedPayment.phone}'
+                  : 'Enregistrer votre Mobile Money par défaut',
+              onTap: () => _configurePaymentMethod(context),
             ),
-          _ProfileAction(
-            icon: Icons.receipt_long_rounded,
-            title: 'Mes commandes',
-            subtitle: 'Suivi, factures et historique',
-            onTap: () => context.go('/orders'),
-          ),
-          _ProfileAction(
-            icon: Icons.location_on_outlined,
-            title: 'Adresse de livraison',
-            subtitle:
-                savedAddress?.label ?? 'Enregistrer le point de livraison',
-            onTap: () => _showDeliveryAddressDialog(context),
-          ),
-          _ProfileAction(
-            icon: Icons.favorite_border_rounded,
-            title: 'Favoris',
-            subtitle: 'Articles sauvegardés',
+            _ProfileAction(
+              icon: Icons.receipt_long_rounded,
+              title: 'Mes commandes',
+              subtitle: 'Suivi, paiement des commandes en attente',
+              onTap: () => context.go('/orders'),
+            ),
+            _ProfileAction(
+              icon: Icons.location_on_outlined,
+              title: 'Adresse de livraison',
+              subtitle:
+                  savedAddress?.label ?? 'Enregistrer le point de livraison',
+              onTap: () => _showDeliveryAddressDialog(context),
+            ),
+            _ProfileAction(
+              icon: Icons.favorite_border_rounded,
+              title: 'Favoris',
+              subtitle: 'Articles sauvegardés',
             onTap: () => context.go('/favorites'),
           ),
           _ProfileAction(
@@ -259,6 +311,31 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
         ),
       ),
     );
+  }
+
+  Future<void> _configurePaymentMethod(BuildContext context) async {
+    final user = ref.read(authNotifierProvider).user;
+    final saved = ref.read(savedPaymentMethodProvider);
+    final result = await showMobileMoneyPaymentDialog(
+      context,
+      prefilledPhone: saved?.phone ?? user?.phone,
+      initialProvider: saved?.provider ?? 'wave',
+    );
+    if (result == null || !context.mounted) return;
+
+    await ref.read(savedPaymentMethodProvider.notifier).save(
+          provider: result['provider']!,
+          phone: result['phone']!,
+        );
+
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Moyen de paiement enregistré.'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+    }
   }
 
   void _showDeliveryAddressDialog(BuildContext context) {

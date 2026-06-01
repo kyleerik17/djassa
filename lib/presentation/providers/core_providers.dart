@@ -12,6 +12,11 @@ import '../../data/services/admin_notification_service.dart'; // ← notificatio
 import '../../data/services/courier_order_service.dart';
 import '../../data/services/courier_profile_service.dart';
 import '../../data/services/delivery_tracking_service.dart';
+import '../../data/services/client_order_tracking_service.dart';
+import '../../data/services/structure_service.dart';
+import '../../core/services/geniuspay_service.dart';
+import '../../core/services/supabase_service.dart';
+import '../../domain/entities/structure.dart';
 import '../screens/shop/shop_data.dart';
 
 import '../../domain/repositories/user_repository.dart';
@@ -115,6 +120,64 @@ class SavedDeliveryAddressNotifier extends StateNotifier<DeliveryAddress?> {
 final savedDeliveryAddressProvider =
     StateNotifierProvider<SavedDeliveryAddressNotifier, DeliveryAddress?>(
   (ref) => SavedDeliveryAddressNotifier(ref.watch(sharedPreferencesProvider)),
+);
+
+// ── Préférences paiement Mobile Money ─────────────────────────
+
+class SavedPaymentMethod {
+  const SavedPaymentMethod({
+    required this.provider,
+    required this.phone,
+  });
+
+  final String provider;
+  final String phone;
+
+  bool get isConfigured => provider.isNotEmpty && phone.length >= 8;
+
+  Map<String, dynamic> toJson() => {'provider': provider, 'phone': phone};
+
+  factory SavedPaymentMethod.fromJson(Map<String, dynamic> json) {
+    return SavedPaymentMethod(
+      provider: '${json['provider'] ?? 'wave'}',
+      phone: '${json['phone'] ?? ''}',
+    );
+  }
+}
+
+class SavedPaymentMethodNotifier extends StateNotifier<SavedPaymentMethod?> {
+  SavedPaymentMethodNotifier(this._prefs) : super(_load(_prefs));
+
+  static const _prefsKey = 'saved_payment_method';
+  final SharedPreferences _prefs;
+
+  static SavedPaymentMethod? _load(SharedPreferences prefs) {
+    final raw = prefs.getString(_prefsKey);
+    if (raw == null || raw.isEmpty) return null;
+    try {
+      return SavedPaymentMethod.fromJson(
+        Map<String, dynamic>.from(jsonDecode(raw) as Map),
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<void> save({required String provider, required String phone}) async {
+    final method = SavedPaymentMethod(provider: provider, phone: phone.trim());
+    await _prefs.setString(_prefsKey, jsonEncode(method.toJson()));
+    state = method;
+  }
+
+  Future<void> clear() async {
+    await _prefs.remove(_prefsKey);
+    state = null;
+  }
+}
+
+final savedPaymentMethodProvider =
+    StateNotifierProvider<SavedPaymentMethodNotifier, SavedPaymentMethod?>(
+  (ref) => SavedPaymentMethodNotifier(ref.watch(sharedPreferencesProvider)),
 );
 
 enum DeliveryTrackingStage {
@@ -347,6 +410,35 @@ final courierProfileProvider = FutureProvider<CourierProfile>((ref) async {
   return ref.watch(courierProfileServiceProvider).fetch();
 });
 
+final structureServiceProvider = Provider<StructureService>((ref) {
+  return StructureService();
+});
+
+final geniusPayServiceProvider = Provider<GeniusPayService>((ref) {
+  return GeniusPayService(SupabaseService.client);
+});
+
+final clientOrderTrackingServiceProvider =
+    Provider<ClientOrderTrackingService>((ref) {
+  return ClientOrderTrackingService();
+});
+
+/// Commande en cours du client (temps réel Supabase).
+final activeClientOrderProvider =
+    StreamProvider.autoDispose<ClientActiveOrder?>((ref) {
+  return ref.watch(clientOrderTrackingServiceProvider).watchActive();
+});
+
+final vendorStructureProvider = FutureProvider<Structure>((ref) async {
+  final structure = await ref.watch(structureServiceProvider).fetchMine();
+  return structure;
+});
+
+final vendorOrdersProvider =
+    FutureProvider.autoDispose<List<VendorOrder>>((ref) async {
+  return ref.watch(structureServiceProvider).fetchVendorOrders();
+});
+
 final courierOrdersProvider =
     StreamProvider.autoDispose<List<CourierOrder>>((ref) {
   return ref.watch(courierOrderServiceProvider).watchOrders();
@@ -427,26 +519,28 @@ final notifUsersProvider =
 // ── Shop providers ────────────────────────────────────────────
 
 final categoriesProvider = FutureProvider<List<ShopCategory>>((ref) async {
-  try {
-    return await ref.watch(shopServiceProvider).fetchCategories();
-  } catch (_) {
-    return shopCategories;
-  }
+  return ref.watch(shopServiceProvider).fetchCategories();
 });
 
 final productsProvider = FutureProvider<List<ShopProduct>>((ref) async {
-  try {
-    return await ref.watch(shopServiceProvider).fetchProducts();
-  } catch (_) {
-    return shopProducts;
-  }
+  return ref.watch(shopServiceProvider).fetchProducts();
 });
+
+final vendorProductsProvider =
+    FutureProvider.autoDispose.family<List<ShopProduct>, String>(
+  (ref, structureId) async {
+    if (structureId.trim().isEmpty) return const [];
+    return ref
+        .watch(shopServiceProvider)
+        .fetchVendorProducts(structureId: structureId);
+  },
+);
 
 final ordersProvider = FutureProvider<List<OrderPreview>>((ref) async {
   try {
     return await ref.watch(shopServiceProvider).fetchOrders();
   } catch (_) {
-    return orderPreviews;
+    return const [];
   }
 });
 

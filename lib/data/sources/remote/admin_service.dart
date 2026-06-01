@@ -11,6 +11,7 @@ class AdminCategory {
     required this.name,
     required this.slug,
     required this.iconName,
+    required this.subtitle,
     required this.sortOrder,
     required this.isActive,
   });
@@ -19,18 +20,47 @@ class AdminCategory {
   final String name;
   final String slug;
   final String iconName;
+  final String subtitle;
   final int sortOrder;
   final bool isActive;
 
   factory AdminCategory.fromJson(Map<String, dynamic> json) {
     return AdminCategory(
-      id:        '${json['id'] ?? ''}',
-      name:      '${json['name'] ?? ''}',
-      slug:      '${json['slug'] ?? ''}',
-      iconName:  '${json['icon_name'] ?? 'category'}',
+      id: '${json['id'] ?? ''}',
+      name: '${json['name'] ?? ''}',
+      slug: '${json['slug'] ?? ''}',
+      iconName: '${json['icon_name'] ?? 'category'}',
+      subtitle: '${json['subtitle'] ?? ''}',
       sortOrder: int.tryParse('${json['sort_order'] ?? 0}') ?? 0,
-      isActive:  json['is_active'] == true,
+      isActive: json['is_active'] == true,
     );
+  }
+}
+
+class AdminCategoryInput {
+  const AdminCategoryInput({
+    required this.name,
+    required this.subtitle,
+    required this.iconName,
+    required this.sortOrder,
+    required this.isActive,
+  });
+
+  final String name;
+  final String subtitle;
+  final String iconName;
+  final int sortOrder;
+  final bool isActive;
+
+  Map<String, dynamic> toJson({String? slug}) {
+    return {
+      'name': name.trim(),
+      if (slug != null) 'slug': slug,
+      'subtitle': subtitle.trim(),
+      'icon_name': iconName,
+      'sort_order': sortOrder,
+      'is_active': isActive,
+    };
   }
 }
 
@@ -77,25 +107,25 @@ class AdminProduct {
         : <String, dynamic>{};
 
     return AdminProduct(
-      id:            '${json['id'] ?? ''}',
-      categoryId:    json['category_id'] == null ? null : '${json['category_id']}',
-      categoryName:  '${category['name'] ?? 'Sans rayon'}',
-      name:          '${json['name'] ?? ''}',
-      slug:          '${json['slug'] ?? ''}',
-      description:   '${json['description'] ?? ''}',
+      id: '${json['id'] ?? ''}',
+      categoryId: json['category_id'] == null ? null : '${json['category_id']}',
+      categoryName: '${category['name'] ?? 'Sans rayon'}',
+      name: '${json['name'] ?? ''}',
+      slug: '${json['slug'] ?? ''}',
+      description: '${json['description'] ?? ''}',
       compatibility: '${json['compatibility'] ?? ''}',
-      price:         int.tryParse('${json['price'] ?? 0}') ?? 0,
-      oldPrice:      int.tryParse('${json['old_price'] ?? 0}') ?? 0,
-      stock:         int.tryParse('${json['stock'] ?? 0}') ?? 0,
-      rating:        double.tryParse('${json['rating'] ?? 4.5}') ?? 4.5,
-      badge:         '${json['badge'] ?? 'Top'}',
-      iconName:      '${json['icon_name'] ?? 'car'}',
-      imageUrl:      json['image_url'] == null ||
-                     '${json['image_url']}'.trim().isEmpty
-                         ? null
-                         : '${json['image_url']}',
-      isActive:      json['is_active'] == true,
-      createdAt:     DateTime.tryParse('${json['created_at'] ?? ''}'),
+      price: int.tryParse('${json['price'] ?? 0}') ?? 0,
+      oldPrice: int.tryParse('${json['old_price'] ?? 0}') ?? 0,
+      stock: int.tryParse('${json['stock'] ?? 0}') ?? 0,
+      rating: double.tryParse('${json['rating'] ?? 4.5}') ?? 4.5,
+      badge: '${json['badge'] ?? 'Top'}',
+      iconName: '${json['icon_name'] ?? 'car'}',
+      imageUrl:
+          json['image_url'] == null || '${json['image_url']}'.trim().isEmpty
+              ? null
+              : '${json['image_url']}',
+      isActive: json['is_active'] == true,
+      createdAt: DateTime.tryParse('${json['created_at'] ?? ''}'),
     );
   }
 }
@@ -131,19 +161,19 @@ class AdminProductInput {
 
   Map<String, dynamic> toJson({String? slug}) {
     return {
-      'category_id':   categoryId,
-      'name':          name.trim(),
+      'category_id': categoryId,
+      'name': name.trim(),
       if (slug != null) 'slug': slug,
-      'description':   description.trim(),
+      'description': description.trim(),
       'compatibility': compatibility.trim(),
-      'price':         price,
-      'old_price':     oldPrice,
-      'stock':         stock,
-      'rating':        rating,
-      'badge':         badge.trim().isEmpty ? 'Top' : badge.trim(),
-      'icon_name':     iconName,
-      'image_url':     imageUrl?.trim().isEmpty == true ? null : imageUrl?.trim(),
-      'is_active':     isActive,
+      'price': price,
+      'old_price': oldPrice,
+      'stock': stock,
+      'rating': rating,
+      'badge': badge.trim().isEmpty ? 'Top' : badge.trim(),
+      'icon_name': iconName,
+      'image_url': imageUrl?.trim().isEmpty == true ? null : imageUrl?.trim(),
+      'is_active': isActive,
     };
   }
 }
@@ -174,7 +204,7 @@ class AdminService {
   Future<List<AdminCategory>> fetchCategories() async {
     final rows = await _client
         .from('categories')
-        .select('id,name,slug,icon_name,sort_order,is_active')
+        .select('id,name,slug,icon_name,subtitle,sort_order,is_active')
         .order('sort_order');
 
     return rows
@@ -182,6 +212,44 @@ class AdminService {
           (row) => AdminCategory.fromJson(Map<String, dynamic>.from(row)),
         )
         .toList();
+  }
+
+  Future<AdminCategory> createCategory(AdminCategoryInput input) async {
+    final slug = await _uniqueCategorySlug(input.name);
+    final row = await _client
+        .from('categories')
+        .insert(input.toJson(slug: slug))
+        .select('id,name,slug,icon_name,subtitle,sort_order,is_active')
+        .single();
+
+    return AdminCategory.fromJson(Map<String, dynamic>.from(row));
+  }
+
+  Future<AdminCategory> updateCategory({
+    required String id,
+    required AdminCategoryInput input,
+  }) async {
+    final row = await _client
+        .from('categories')
+        .update(input.toJson())
+        .eq('id', id)
+        .select('id,name,slug,icon_name,subtitle,sort_order,is_active')
+        .single();
+
+    return AdminCategory.fromJson(Map<String, dynamic>.from(row));
+  }
+
+  Future<void> setCategoryActive({
+    required String id,
+    required bool isActive,
+  }) async {
+    await _client
+        .from('categories')
+        .update({'is_active': isActive}).eq('id', id);
+  }
+
+  Future<void> deleteCategory(String id) async {
+    await _client.from('categories').delete().eq('id', id);
   }
 
   Future<List<AdminProduct>> fetchProducts() async {
@@ -226,14 +294,30 @@ class AdminService {
     required String id,
     required bool isActive,
   }) async {
-    await _client
-        .from('products')
-        .update({'is_active': isActive})
-        .eq('id', id);
+    await _client.from('products').update({'is_active': isActive}).eq('id', id);
   }
 
   Future<void> deleteProduct(String id) async {
     await _client.from('products').delete().eq('id', id);
+  }
+
+  Future<String> _uniqueCategorySlug(String name) async {
+    final base = _slugify(name);
+    final safeBase = base.isEmpty ? 'rayon' : base;
+    var candidate = safeBase;
+    var suffix = 2;
+
+    while (true) {
+      final existing = await _client
+          .from('categories')
+          .select('id')
+          .eq('slug', candidate)
+          .maybeSingle();
+
+      if (existing == null) return candidate;
+      candidate = '$safeBase-$suffix';
+      suffix++;
+    }
   }
 
   Future<String> _uniqueSlug(String name) async {

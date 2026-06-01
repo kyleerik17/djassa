@@ -2,6 +2,8 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../models/user_model.dart';
 import '../../../core/services/supabase_service.dart';
+import '../../../core/utils/user_role.dart';
+import '../../services/structure_service.dart';
 
 class RemoteDataSource {
   final SupabaseClient client = SupabaseService.client;
@@ -43,6 +45,21 @@ class RemoteDataSource {
         'email': normalizedEmail,
         'role': role,
       });
+
+      if (role == UserRole.vendor) {
+        try {
+          await StructureService(client: client).createDefaultForOwner(
+            ownerId: user.id,
+            displayName: '$name $surname'.trim(),
+            phone: phone,
+            email: normalizedEmail,
+          );
+        } on PostgrestException catch (e) {
+          if (!e.message.toLowerCase().contains('structures')) {
+            rethrow;
+          }
+        }
+      }
 
       return UserModel(
         id: user.id,
@@ -134,8 +151,11 @@ class RemoteDataSource {
       throw Exception('Identifiants incorrects');
     }
 
-    final profile =
-        await client.from('profiles').select().eq('id', user.id).single();
+    final profile = await client
+        .from('profiles')
+        .select(kProfileIdentitySelect)
+        .eq('id', user.id)
+        .single();
 
     return UserModel.fromJson(profile);
   }
@@ -146,8 +166,11 @@ class RemoteDataSource {
 
     if (user == null) return null;
 
-    final profile =
-        await client.from('profiles').select().eq('id', user.id).single();
+    final profile = await client
+        .from('profiles')
+        .select(kProfileIdentitySelect)
+        .eq('id', user.id)
+        .single();
 
     return UserModel.fromJson(profile);
   }
@@ -162,10 +185,9 @@ class RemoteDataSource {
           'phone': user.phone,
           'email': user.email,
           'avatar_url': user.avatarUrl,
-          'role': user.role,
         })
         .eq('id', user.id)
-        .select()
+        .select(kProfileIdentitySelect)
         .single();
 
     return UserModel.fromJson(updated);

@@ -25,11 +25,7 @@ class FavoritesNotifier extends StateNotifier<List<ShopProduct>> {
 
 final favoritesProvider =
     StateNotifierProvider<FavoritesNotifier, List<ShopProduct>>((ref) {
-  final products = ref.watch(productsProvider).maybeWhen(
-        data: (value) => value,
-        orElse: () => shopProducts,
-      );
-  return FavoritesNotifier(products.take(3).toList());
+  return FavoritesNotifier(const []);
 });
 
 // ── Screen ────────────────────────────────────────────────────────────────────
@@ -100,8 +96,8 @@ class FavoritesScreen extends ConsumerWidget {
                         // Bouton ajouter au panier
                         IconButton.filledTonal(
                           style: IconButton.styleFrom(
-                            backgroundColor: DjassaTheme.accentOrange
-                                .withValues(alpha: .14),
+                            backgroundColor:
+                                DjassaTheme.accentOrange.withValues(alpha: .14),
                             foregroundColor: DjassaTheme.accentOrange,
                           ),
                           tooltip: 'Ajouter au panier',

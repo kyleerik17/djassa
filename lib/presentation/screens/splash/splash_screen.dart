@@ -1,73 +1,114 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_animate/flutter_animate.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
 import '../../../core/theme/djassa_theme.dart';
 import '../../../core/utils/constants.dart';
+import '../../../core/utils/user_role.dart';
+import '../../../presentation/providers/auth_provider.dart';
 
-/// Écran de splash premium pour Djassa
-class SplashScreen extends StatefulWidget {
-  const SplashScreen({Key? key}) : super(key: key);
+/// Splash aligné sur DjassaTheme : noir premium, orange accent, transition vers le fond clair.
+class SplashScreen extends ConsumerStatefulWidget {
+  const SplashScreen({super.key});
 
   @override
-  State<SplashScreen> createState() => _SplashScreenState();
+  ConsumerState<SplashScreen> createState() => _SplashScreenState();
 }
 
-class _SplashScreenState extends State<SplashScreen>
+class _SplashScreenState extends ConsumerState<SplashScreen>
     with TickerProviderStateMixin {
-  bool _showFirstImage = false;
-  bool _showSecondImage = false;
-  bool _isBlackBackground = false;
-  bool _showText = false;
-  double _imageWidth = 40;
-  double _imageHeight = 40;
+  late final AnimationController _introController;
+  late final AnimationController _exitController;
+
+  late final Animation<double> _logoScale;
+  late final Animation<double> _logoOpacity;
+  late final Animation<double> _textOpacity;
+  late final Animation<Offset> _textSlide;
+  late final Animation<double> _ringScale;
+  late final Animation<double> _ringOpacity;
+  late final Animation<double> _exitFade;
+  late final Animation<Color?> _bgLighten;
 
   @override
   void initState() {
     super.initState();
-    _startAnimation();
+    _initAnimations();
+    _runSequence();
   }
 
-  Future<void> _startAnimation() async {
-    // Premier délai avant d'afficher le premier logo
-    await Future.delayed(const Duration(milliseconds: 500));
+  void _initAnimations() {
+    _introController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1400),
+    );
+    _exitController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 450),
+    );
+
+    _logoScale = Tween<double>(begin: 0.88, end: 1.0).animate(
+      CurvedAnimation(
+        parent: _introController,
+        curve: const Interval(0.0, 0.55, curve: Curves.easeOutCubic),
+      ),
+    );
+    _logoOpacity = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(
+        parent: _introController,
+        curve: const Interval(0.0, 0.4, curve: Curves.easeOut),
+      ),
+    );
+    _textOpacity = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(
+        parent: _introController,
+        curve: const Interval(0.35, 0.75, curve: Curves.easeOut),
+      ),
+    );
+    _textSlide = Tween<Offset>(
+      begin: const Offset(0, 0.15),
+      end: Offset.zero,
+    ).animate(
+      CurvedAnimation(
+        parent: _introController,
+        curve: const Interval(0.35, 0.75, curve: Curves.easeOutCubic),
+      ),
+    );
+    _ringScale = Tween<double>(begin: 0.85, end: 1.08).animate(
+      CurvedAnimation(
+        parent: _introController,
+        curve: const Interval(0.1, 0.7, curve: Curves.easeOutCubic),
+      ),
+    );
+    _ringOpacity = Tween<double>(begin: 0.0, end: 0.35).animate(
+      CurvedAnimation(
+        parent: _introController,
+        curve: const Interval(0.1, 0.5, curve: Curves.easeOut),
+      ),
+    );
+
+    _exitFade = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(parent: _exitController, curve: Curves.easeInOut),
+    );
+    _bgLighten = ColorTween(
+      begin: DjassaTheme.backgroundDark,
+      end: DjassaTheme.backgroundSecondary,
+    ).animate(
+      CurvedAnimation(parent: _exitController, curve: Curves.easeInOut),
+    );
+  }
+
+  Future<void> _runSequence() async {
+    await Future.delayed(const Duration(milliseconds: 80));
+    if (!mounted) return;
+    _introController.forward();
+
+    await Future.delayed(const Duration(milliseconds: 900));
     if (!mounted) return;
 
-    setState(() => _showFirstImage = true);
-
-    // Animation d'agrandissement
-    await Future.delayed(const Duration(milliseconds: 300));
-    if (!mounted) return;
-
-    setState(() {
-      _imageWidth = 200;
-      _imageHeight = 60;
-    });
-
-    // Transition vers fond noir
-    await Future.delayed(const Duration(milliseconds: 800));
-    if (!mounted) return;
-
-    setState(() => _isBlackBackground = true);
-
-    // Transition vers deuxième logo
-    await Future.delayed(const Duration(milliseconds: 600));
-    if (!mounted) return;
-
-    setState(() {
-      _showFirstImage = false;
-      _showSecondImage = true;
-    });
-
-    // Affichage du texte
-    await Future.delayed(const Duration(milliseconds: 400));
-    if (!mounted) return;
-
-    setState(() => _showText = true);
-
-    // Navigation vers onboarding ou home
-    await Future.delayed(const Duration(milliseconds: 1200));
+    _exitController.forward();
+    await Future.delayed(const Duration(milliseconds: 480));
     if (!mounted) return;
 
     await _navigateToNextScreen();
@@ -78,100 +119,183 @@ class _SplashScreenState extends State<SplashScreen>
     final onboardingDone =
         prefs.getBool(AppConstants.onboardingCompleteKey) ?? false;
     if (!mounted) return;
-    context.go(
-      onboardingDone ? AppConstants.loginRoute : AppConstants.onboardingRoute,
-    );
-  }
 
-  @override
-  Widget build(BuildContext context) {
-    SystemChrome.setSystemUIOverlayStyle(SystemUiOverlayStyle.dark.copyWith(
-      statusBarColor: Colors.black,
-      statusBarIconBrightness: Brightness.light,
-      statusBarBrightness: Brightness.dark,
-    ));
+    final authState = ref.read(authNotifierProvider);
 
-    return Scaffold(
-      body: AnimatedContainer(
-        duration: const Duration(seconds: 1),
-        color: _isBlackBackground
-            ? DjassaTheme.backgroundDark
-            : DjassaTheme.backgroundPrimary,
-        child: Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              Stack(
-                alignment: Alignment.center,
-                children: [
-                  if (_showFirstImage)
-                    AnimatedContainer(
-                      duration: const Duration(milliseconds: 800),
-                      width: _imageWidth,
-                      height: _imageHeight,
-                      child: Image.asset(
-                        'assets/icons/lgo.png',
-                        errorBuilder: (_, __, ___) => const Icon(
-                          Icons.shopping_cart,
-                          size: 60,
-                          color: DjassaTheme.primaryBlack,
-                        ),
-                      ),
-                    )
-                        .animate(onPlay: (controller) => controller.repeat())
-                        .fadeIn(duration: 600.ms)
-                        .scale(
-                            begin: const Offset(0.5, 0.5),
-                            end: const Offset(1.0, 1.0)),
-                  if (_showSecondImage)
-                    Opacity(
-                      opacity: _showSecondImage ? 1.0 : 0.0,
-                      child: Image.asset(
-                        'assets/icons/home.png',
-                        height: 60,
-                        width: 200,
-                        errorBuilder: (_, __, ___) => const Text(
-                          'DJASSA',
-                          style: TextStyle(
-                            fontSize: 40,
-                            fontWeight: FontWeight.bold,
-                            fontFamily: 'Hemi Head',
-                            color: DjassaTheme.accentOrange,
-                          ),
-                        ),
-                      ),
-                    ).animate().fadeIn(duration: 800.ms),
-                ],
-              ),
-              if (_showText)
-                Text(
-                  'Djassa',
-                  style: TextStyle(
-                    color: _isBlackBackground
-                        ? DjassaTheme.primaryWhite
-                        : DjassaTheme.textPrimary,
-                    fontWeight: FontWeight.w400,
-                    fontSize: 50,
-                    fontFamily: "Hemi Head",
-                    letterSpacing: 0.05,
-                  ),
-                ).animate(onPlay: (controller) => controller.forward()).moveX(
-                      begin: 200,
-                      end: 0,
-                      curve: Curves.easeOut,
-                      duration: 800.ms,
-                    ),
-            ],
-          ),
-        ),
-      ),
-    );
+    if (authState.isAuthenticated) {
+      final user = authState.user;
+      context.go(
+        user != null ? UserRole.homeRoute(user) : AppConstants.homeRoute,
+      );
+    } else if (!onboardingDone) {
+      context.go(AppConstants.onboardingRoute);
+    } else {
+      context.go(AppConstants.loginRoute);
+    }
   }
 
   @override
   void dispose() {
-    SystemChrome.setSystemUIOverlayStyle(SystemUiOverlayStyle.light);
+    _introController.dispose();
+    _exitController.dispose();
     super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    SystemChrome.setSystemUIOverlayStyle(
+      SystemUiOverlayStyle(
+        statusBarColor: Colors.transparent,
+        statusBarIconBrightness: _exitController.isAnimating &&
+                _exitController.value > 0.4
+            ? Brightness.dark
+            : Brightness.light,
+      ),
+    );
+
+    return AnimatedBuilder(
+      animation: Listenable.merge([_introController, _exitController]),
+      builder: (context, child) {
+        final exiting = _exitController.value > 0;
+        final bgColor = exiting
+            ? _bgLighten.value ?? DjassaTheme.backgroundDark
+            : DjassaTheme.backgroundDark;
+
+        return Scaffold(
+          backgroundColor: bgColor,
+          body: Stack(
+            fit: StackFit.expand,
+            children: [
+              if (!exiting)
+                DecoratedBox(
+                  decoration: BoxDecoration(
+                    gradient: RadialGradient(
+                      center: Alignment.topCenter,
+                      radius: 1.1,
+                      colors: [
+                        DjassaTheme.secondaryBlack,
+                        DjassaTheme.backgroundDark,
+                      ],
+                    ),
+                  ),
+                ),
+              FadeTransition(
+                opacity: Tween<double>(begin: 1, end: 0).animate(_exitFade),
+                child: child,
+              ),
+              if (exiting)
+                FadeTransition(
+                  opacity: _exitFade,
+                  child: ColoredBox(color: DjassaTheme.backgroundSecondary),
+                ),
+            ],
+          ),
+        );
+      },
+      child: SafeArea(
+        child: Column(
+          children: [
+            const Spacer(flex: 3),
+            AnimatedBuilder(
+              animation: _introController,
+              builder: (context, _) => Transform.scale(
+                scale: _logoScale.value,
+                child: Opacity(
+                  opacity: _logoOpacity.value,
+                  child: SizedBox(
+                    width: 120,
+                    height: 120,
+                    child: Stack(
+                      alignment: Alignment.center,
+                      children: [
+                        Transform.scale(
+                          scale: _ringScale.value,
+                          child: Opacity(
+                            opacity: _ringOpacity.value,
+                            child: Container(
+                              width: 118,
+                              height: 118,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                border: Border.all(
+                                  color: DjassaTheme.accentOrange
+                                      .withValues(alpha: 0.45),
+                                  width: 1.5,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                        Container(
+                          width: 88,
+                          height: 88,
+                          decoration: BoxDecoration(
+                            color: DjassaTheme.accentOrange,
+                            borderRadius: BorderRadius.circular(22),
+                            boxShadow: DjassaTheme.shadowMedium,
+                          ),
+                          child: const Icon(
+                            Icons.directions_car_rounded,
+                            size: 48,
+                            color: DjassaTheme.primaryWhite,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 28),
+            SlideTransition(
+              position: _textSlide,
+              child: FadeTransition(
+                opacity: _textOpacity,
+                child: Column(
+                  children: [
+                    Text(
+                      'DJASSA',
+                      style: Theme.of(context).textTheme.displayMedium?.copyWith(
+                            color: DjassaTheme.primaryWhite,
+                            letterSpacing: 6,
+                            fontWeight: FontWeight.w900,
+                          ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Votre marché, livré',
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                            color: DjassaTheme.primaryWhite
+                                .withValues(alpha: 0.72),
+                            letterSpacing: 1.2,
+                            fontFamily: 'Cabin',
+                          ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const Spacer(flex: 4),
+            FadeTransition(
+              opacity: _textOpacity,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(64, 0, 64, 40),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(4),
+                  child: LinearProgressIndicator(
+                    minHeight: 2,
+                    backgroundColor:
+                        DjassaTheme.primaryWhite.withValues(alpha: 0.12),
+                    valueColor: const AlwaysStoppedAnimation<Color>(
+                      DjassaTheme.accentOrange,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }

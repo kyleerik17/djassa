@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/theme/djassa_theme.dart';
 import '../../screens/shop/shop_data.dart';
+import '../vendor/client_shop_gate.dart';
 
 class ShopScaffold extends StatelessWidget {
   const ShopScaffold({
@@ -14,6 +15,7 @@ class ShopScaffold extends StatelessWidget {
     this.actions,
     this.showBackButton = false,
     this.padding = const EdgeInsets.fromLTRB(16, 12, 16, 24),
+    this.darkHeader = false,
   });
 
   final int currentIndex;
@@ -22,44 +24,71 @@ class ShopScaffold extends StatelessWidget {
   final List<Widget>? actions;
   final bool showBackButton;
   final EdgeInsets padding;
+  final bool darkHeader;
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: DjassaTheme.backgroundSecondary,
-      appBar: AppBar(
+    return ClientShopGate(
+      child: Scaffold(
         backgroundColor: DjassaTheme.backgroundSecondary,
-        leading: showBackButton
-            ? IconButton(
-                icon: const Icon(Icons.arrow_back_ios_new_rounded),
-                onPressed: () =>
-                    context.canPop() ? context.pop() : context.go('/home'),
-              )
-            : null,
-        title: Text(title),
-        actions: actions ??
-            [
-              IconButton(
-                tooltip: 'Recherche',
-                icon: const Icon(Icons.search_rounded),
-                onPressed: () => context.go('/search'),
-              ),
-              IconButton(
-                tooltip: 'Notifications',
-                icon: const Icon(Icons.notifications_none_rounded),
-                onPressed: () => context.go('/notifications'),
-              ),
-              const SizedBox(width: 4),
-            ],
-      ),
-      body: SafeArea(
-        top: false,
-        child: SingleChildScrollView(
-          padding: padding,
-          child: child,
+        appBar: AppBar(
+          backgroundColor: darkHeader
+              ? DjassaTheme.primaryBlack
+              : DjassaTheme.backgroundSecondary,
+          foregroundColor:
+              darkHeader ? DjassaTheme.primaryWhite : DjassaTheme.textPrimary,
+          leading: showBackButton
+              ? IconButton(
+                  icon: const Icon(Icons.arrow_back_ios_new_rounded),
+                  onPressed: () =>
+                      context.canPop() ? context.pop() : context.go('/home'),
+                )
+              : null,
+          title: Text(
+            title,
+            style: TextStyle(
+              color: darkHeader
+                  ? DjassaTheme.primaryWhite
+                  : DjassaTheme.textPrimary,
+              fontFamily: 'Hemi Head',
+              fontSize: 24,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          actions: actions ??
+              [
+                IconButton(
+                  tooltip: 'Recherche',
+                  icon: Icon(
+                    Icons.search_rounded,
+                    color: darkHeader
+                        ? DjassaTheme.primaryWhite
+                        : DjassaTheme.textPrimary,
+                  ),
+                  onPressed: () => context.go('/search'),
+                ),
+                IconButton(
+                  tooltip: 'Notifications',
+                  icon: Icon(
+                    Icons.notifications_none_rounded,
+                    color: darkHeader
+                        ? DjassaTheme.primaryWhite
+                        : DjassaTheme.textPrimary,
+                  ),
+                  onPressed: () => context.go('/notifications'),
+                ),
+                const SizedBox(width: 4),
+              ],
         ),
+        body: SafeArea(
+          top: false,
+          child: SingleChildScrollView(
+            padding: padding,
+            child: child,
+          ),
+        ),
+        bottomNavigationBar: _ShopBottomNavigation(currentIndex: currentIndex),
       ),
-      bottomNavigationBar: _ShopBottomNavigation(currentIndex: currentIndex),
     );
   }
 }
@@ -71,8 +100,8 @@ class _ShopBottomNavigation extends StatelessWidget {
 
   static const _routes = [
     '/home',
-    '/categories',
-    '/cart',
+    '/search',
+    '/vendor',
     '/favorites',
     '/profile',
   ];
@@ -80,50 +109,151 @@ class _ShopBottomNavigation extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
+      margin: const EdgeInsets.fromLTRB(14, 0, 14, 12),
       decoration: BoxDecoration(
         color: DjassaTheme.primaryWhite,
         boxShadow: DjassaTheme.shadowMedium,
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+        borderRadius: BorderRadius.circular(26),
       ),
       child: ClipRRect(
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-        child: BottomNavigationBar(
-          currentIndex: currentIndex,
-          onTap: (index) {
-            if (index != currentIndex) {
-              context.go(_routes[index]);
-            }
-          },
-          selectedItemColor: DjassaTheme.accentOrange,
-          unselectedItemColor: DjassaTheme.textSecondary,
-          selectedLabelStyle: const TextStyle(fontWeight: FontWeight.w700),
-          items: const [
-            BottomNavigationBarItem(
-              icon: Icon(Icons.home_outlined),
-              activeIcon: Icon(Icons.home_rounded),
-              label: 'Accueil',
+        borderRadius: BorderRadius.circular(26),
+        child: SafeArea(
+          top: false,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
+            child: Row(
+              children: [
+                _NavItem(
+                  icon: Icons.home_outlined,
+                  activeIcon: Icons.home_rounded,
+                  label: 'Accueil',
+                  selected: currentIndex == 0,
+                  onTap: () => context.go(_routes[0]),
+                ),
+                _NavItem(
+                  icon: Icons.search_rounded,
+                  activeIcon: Icons.search_rounded,
+                  label: 'Recherche',
+                  selected: currentIndex == 1,
+                  onTap: () => context.go(_routes[1]),
+                ),
+                _SellNavButton(
+                  selected: currentIndex == 2,
+                  onTap: () => context.go(_routes[2]),
+                ),
+                _NavItem(
+                  icon: Icons.favorite_border_rounded,
+                  activeIcon: Icons.favorite_rounded,
+                  label: 'Favoris',
+                  selected: currentIndex == 3,
+                  onTap: () => context.go(_routes[3]),
+                ),
+                _NavItem(
+                  icon: Icons.person_outline_rounded,
+                  activeIcon: Icons.person_rounded,
+                  label: 'Profil',
+                  selected: currentIndex == 4,
+                  onTap: () => context.go(_routes[4]),
+                ),
+              ],
             ),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.grid_view_outlined),
-              activeIcon: Icon(Icons.grid_view_rounded),
-              label: 'Rayons',
-            ),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.shopping_bag_outlined),
-              activeIcon: Icon(Icons.shopping_bag_rounded),
-              label: 'Panier',
-            ),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.favorite_border_rounded),
-              activeIcon: Icon(Icons.favorite_rounded),
-              label: 'Favoris',
-            ),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.person_outline_rounded),
-              activeIcon: Icon(Icons.person_rounded),
-              label: 'Profil',
-            ),
-          ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _NavItem extends StatelessWidget {
+  const _NavItem({
+    required this.icon,
+    required this.activeIcon,
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final IconData activeIcon;
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = selected ? DjassaTheme.accentOrange : DjassaTheme.textPrimary;
+    return Expanded(
+      child: InkWell(
+        borderRadius: BorderRadius.circular(18),
+        onTap: onTap,
+        child: SizedBox(
+          height: 54,
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(selected ? activeIcon : icon, color: color, size: 23),
+              const SizedBox(height: 3),
+              FittedBox(
+                child: Text(
+                  label,
+                  style: TextStyle(
+                    color: color,
+                    fontSize: 11,
+                    fontWeight: selected ? FontWeight.w800 : FontWeight.w500,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _SellNavButton extends StatelessWidget {
+  const _SellNavButton({required this.selected, required this.onTap});
+
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: InkWell(
+        borderRadius: BorderRadius.circular(24),
+        onTap: onTap,
+        child: SizedBox(
+          height: 60,
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Container(
+                width: 44,
+                height: 44,
+                decoration: const BoxDecoration(
+                  color: DjassaTheme.accentOrange,
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.add_rounded,
+                  color: DjassaTheme.primaryWhite,
+                  size: 30,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                'Vendre',
+                style: TextStyle(
+                  color: selected
+                      ? DjassaTheme.accentOrange
+                      : DjassaTheme.textPrimary,
+                  fontSize: 11,
+                  fontWeight: selected ? FontWeight.w800 : FontWeight.w500,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -153,9 +283,10 @@ class SectionTitle extends StatelessWidget {
           ),
         ),
         if (actionLabel != null)
-          TextButton(
+          TextButton.icon(
             onPressed: onAction,
-            child: Text(actionLabel!),
+            icon: const Text(''),
+            label: Text(actionLabel!),
           ),
       ],
     );
@@ -185,7 +316,7 @@ class PromoCard extends StatelessWidget {
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color: DjassaTheme.primaryBlack,
-        borderRadius: BorderRadius.circular(28),
+        borderRadius: BorderRadius.circular(18),
         boxShadow: DjassaTheme.shadowHeavy,
       ),
       child: Stack(
@@ -239,7 +370,7 @@ class PromoCard extends StatelessWidget {
                   backgroundColor: DjassaTheme.accentOrange,
                   foregroundColor: DjassaTheme.primaryWhite,
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16),
+                    borderRadius: BorderRadius.circular(12),
                   ),
                 ),
                 onPressed: onPressed,
@@ -266,23 +397,24 @@ class CategoryPill extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return InkWell(
-      borderRadius: BorderRadius.circular(20),
+      borderRadius: BorderRadius.circular(14),
       onTap: onTap,
       child: Container(
-        width: 132,
-        padding: const EdgeInsets.all(14),
+        width: 104,
+        padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
           color: DjassaTheme.primaryWhite,
-          borderRadius: BorderRadius.circular(20),
+          borderRadius: BorderRadius.circular(14),
           border: Border.all(color: DjassaTheme.borderMedium),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _RoundIcon(icon: category.icon),
+            Center(child: Icon(category.icon, size: 34)),
             const Spacer(),
             Text(
               category.name,
+              textAlign: TextAlign.center,
               style: Theme.of(context).textTheme.titleMedium?.copyWith(
                     fontWeight: FontWeight.w700,
                   ),
@@ -312,12 +444,12 @@ class ProductCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return InkWell(
-      borderRadius: BorderRadius.circular(24),
+      borderRadius: BorderRadius.circular(14),
       onTap: () => context.go('/product/${product.id}'),
       child: Container(
         decoration: BoxDecoration(
           color: DjassaTheme.primaryWhite,
-          borderRadius: BorderRadius.circular(24),
+          borderRadius: BorderRadius.circular(14),
           border: Border.all(color: DjassaTheme.borderMedium),
           boxShadow: DjassaTheme.shadowLight,
         ),
@@ -329,21 +461,15 @@ class ProductCard extends StatelessWidget {
                 tag: 'product-${product.id}',
                 child: Container(
                   width: double.infinity,
-                  margin: const EdgeInsets.all(10),
                   decoration: BoxDecoration(
                     color: DjassaTheme.backgroundSecondary,
-                    borderRadius: BorderRadius.circular(20),
+                    borderRadius: const BorderRadius.vertical(
+                      top: Radius.circular(14),
+                    ),
                   ),
                   child: Stack(
                     children: [
-                      Center(
-                        child: Icon(
-                          product.icon,
-                          size: compact ? 42 : 56,
-                          color:
-                              DjassaTheme.primaryBlack.withValues(alpha: .72),
-                        ),
-                      ),
+                      Positioned.fill(child: ProductMedia(product: product)),
                       Positioned(
                         top: 10,
                         left: 10,
@@ -354,7 +480,7 @@ class ProductCard extends StatelessWidget {
                           ),
                           decoration: BoxDecoration(
                             color: DjassaTheme.accentOrange,
-                            borderRadius: BorderRadius.circular(999),
+                            borderRadius: BorderRadius.circular(6),
                           ),
                           child: Text(
                             product.badge,
@@ -386,7 +512,7 @@ class ProductCard extends StatelessWidget {
               ),
             ),
             Padding(
-              padding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
+              padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -399,25 +525,7 @@ class ProductCard extends StatelessWidget {
                         ),
                   ),
                   const SizedBox(height: 7),
-                  Row(
-                    children: [
-                      const Icon(
-                        Icons.star_rounded,
-                        size: 16,
-                        color: DjassaTheme.accentOrange,
-                      ),
-                      const SizedBox(width: 4),
-                      Text(
-                        product.rating.toStringAsFixed(1),
-                        style: Theme.of(context).textTheme.bodySmall,
-                      ),
-                      const Spacer(),
-                      Text(
-                        '${product.stock} en stock',
-                        style: Theme.of(context).textTheme.bodySmall,
-                      ),
-                    ],
-                  ),
+                  _LocationLine(text: product.compatibility),
                   const SizedBox(height: 8),
                   Text(
                     formatPrice(product.price),
@@ -451,25 +559,27 @@ class ProductTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return InkWell(
-      borderRadius: BorderRadius.circular(22),
+      borderRadius: BorderRadius.circular(14),
       onTap: onTap ?? () => context.go('/product/${product.id}'),
       child: Container(
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
           color: DjassaTheme.primaryWhite,
-          borderRadius: BorderRadius.circular(22),
+          borderRadius: BorderRadius.circular(14),
           border: Border.all(color: DjassaTheme.borderMedium),
         ),
         child: Row(
           children: [
-            Container(
-              width: 68,
-              height: 68,
-              decoration: BoxDecoration(
-                color: DjassaTheme.backgroundSecondary,
-                borderRadius: BorderRadius.circular(18),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: Container(
+                width: 68,
+                height: 68,
+                decoration: BoxDecoration(
+                  color: DjassaTheme.backgroundSecondary,
+                ),
+                child: ProductMedia(product: product, iconSize: 32),
               ),
-              child: Icon(product.icon, color: DjassaTheme.primaryBlack),
             ),
             const SizedBox(width: 12),
             Expanded(
@@ -485,7 +595,7 @@ class ProductTile extends StatelessWidget {
                         ),
                   ),
                   const SizedBox(height: 5),
-                  Text(product.compatibility),
+                  _LocationLine(text: product.compatibility),
                   const SizedBox(height: 6),
                   Text(
                     formatPrice(product.price),
@@ -531,7 +641,7 @@ class EmptyStateCard extends StatelessWidget {
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
         color: DjassaTheme.primaryWhite,
-        borderRadius: BorderRadius.circular(28),
+        borderRadius: BorderRadius.circular(16),
         border: Border.all(color: DjassaTheme.borderMedium),
       ),
       child: Column(
@@ -583,3 +693,85 @@ class _RoundIcon extends StatelessWidget {
   }
 }
 
+class ProductMedia extends StatelessWidget {
+  const ProductMedia({
+    super.key,
+    required this.product,
+    this.iconSize = 56,
+  });
+
+  final ShopProduct product;
+  final double iconSize;
+
+  @override
+  Widget build(BuildContext context) {
+    final imageUrl = product.imageUrl?.trim();
+    if (imageUrl != null && imageUrl.isNotEmpty) {
+      final image = imageUrl.startsWith('http')
+          ? Image.network(
+              imageUrl,
+              fit: BoxFit.cover,
+              errorBuilder: (_, __, ___) => _FallbackProductIcon(
+                icon: product.icon,
+                iconSize: iconSize,
+              ),
+            )
+          : Image.asset(
+              imageUrl,
+              fit: BoxFit.cover,
+              errorBuilder: (_, __, ___) => _FallbackProductIcon(
+                icon: product.icon,
+                iconSize: iconSize,
+              ),
+            );
+      return image;
+    }
+    return _FallbackProductIcon(icon: product.icon, iconSize: iconSize);
+  }
+}
+
+class _FallbackProductIcon extends StatelessWidget {
+  const _FallbackProductIcon({required this.icon, required this.iconSize});
+
+  final IconData icon;
+  final double iconSize;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Icon(
+        icon,
+        size: iconSize,
+        color: DjassaTheme.primaryBlack.withValues(alpha: .72),
+      ),
+    );
+  }
+}
+
+class _LocationLine extends StatelessWidget {
+  const _LocationLine({required this.text});
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        const Icon(
+          Icons.location_on_rounded,
+          size: 15,
+          color: DjassaTheme.textSecondary,
+        ),
+        const SizedBox(width: 3),
+        Expanded(
+          child: Text(
+            text.trim().isEmpty ? 'Abidjan' : text,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+        ),
+      ],
+    );
+  }
+}

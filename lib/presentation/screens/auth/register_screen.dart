@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/theme/djassa_theme.dart';
+import '../../../core/utils/user_role.dart';
 
 import '../../../domain/entities/user.dart';
 
@@ -129,7 +130,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
             );
 
             /// REDIRECT
-            context.go(user.isCourier ? '/courier' : '/home');
+            context.go(UserRole.homeRoute(user));
           } catch (e) {
             if (!mounted) return;
             ScaffoldMessenger.of(context).showSnackBar(
@@ -290,14 +291,19 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                 SegmentedButton<String>(
                   segments: const [
                     ButtonSegment(
-                      value: 'client',
+                      value: UserRole.client,
                       icon: Icon(Icons.person_outline_rounded),
                       label: Text('Client'),
                     ),
                     ButtonSegment(
-                      value: 'courier',
+                      value: UserRole.courier,
                       icon: Icon(Icons.delivery_dining_rounded),
                       label: Text('Livreur'),
+                    ),
+                    ButtonSegment(
+                      value: UserRole.vendor,
+                      icon: Icon(Icons.storefront_outlined),
+                      label: Text('Vendeur'),
                     ),
                   ],
                   selected: {_selectedRole},
@@ -309,9 +315,13 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  _selectedRole == 'courier'
-                      ? 'Le profil livreur re?oit les commandes disponibles et peut les accepter.'
-                      : 'Le profil client permet de passer des commandes.',
+                  switch (_selectedRole) {
+                    UserRole.courier =>
+                      'Profil livreur : permis et véhicule sur votre espace dédié.',
+                    UserRole.vendor =>
+                      'Profil vendeur : votre boutique est liée via la table structures.',
+                    _ => 'Profil client : commandes, favoris et adresses de livraison.',
+                  },
                   style: Theme.of(context).textTheme.bodySmall,
                 ),
 

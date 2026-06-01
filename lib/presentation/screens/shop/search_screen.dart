@@ -5,7 +5,6 @@ import 'package:go_router/go_router.dart';
 import '../../../core/theme/djassa_theme.dart';
 import '../../providers/core_providers.dart';
 import '../../widgets/shop/shop_widgets.dart';
-import 'shop_data.dart';
 
 class SearchScreen extends ConsumerWidget {
   const SearchScreen({
@@ -19,14 +18,10 @@ class SearchScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final categories = ref.watch(categoriesProvider).maybeWhen(
-          data: (value) => value,
-          orElse: () => shopCategories,
-        );
-    final allProducts = ref.watch(productsProvider).maybeWhen(
-          data: (value) => value,
-          orElse: () => shopProducts,
-        );
+    final categoriesAsync = ref.watch(categoriesProvider);
+    final productsAsync = ref.watch(productsProvider);
+    final categories = categoriesAsync.valueOrNull ?? [];
+    final allProducts = productsAsync.valueOrNull ?? [];
     final normalizedQuery = (initialQuery ?? '').toLowerCase().trim();
     final filteredProducts = allProducts.where((product) {
       final matchesQuery = normalizedQuery.isEmpty ||
@@ -63,44 +58,62 @@ class SearchScreen extends ConsumerWidget {
             onSubmitted: (value) => context.go('/search?q=$value'),
           ),
           const SizedBox(height: 16),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              _FilterChip(label: 'Tous', selected: category == null),
-              for (final item in categories)
-                _FilterChip(
-                  label: item.name,
-                  selected: category == item.name,
-                  onTap: () => context.go('/search?category=${item.name}'),
-                ),
-            ],
-          ),
-          const SizedBox(height: 22),
-          SectionTitle(
-            title: category == null ? 'Résultats' : category!,
-            actionLabel: '${filteredProducts.length} articles',
-          ),
-          const SizedBox(height: 12),
-          if (filteredProducts.isEmpty)
-            EmptyStateCard(
-              icon: Icons.manage_search_rounded,
-              title: 'Aucun résultat',
-              message:
-                  'Essayez une autre recherche ou parcourez les rayons populaires.',
-              buttonLabel: 'Voir les rayons',
-              onPressed: () => context.go('/categories'),
+          if (categoriesAsync.isLoading || productsAsync.isLoading)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 28),
+              child: Center(child: CircularProgressIndicator()),
             )
-          else
-            ListView.separated(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              itemCount: filteredProducts.length,
-              separatorBuilder: (_, __) => const SizedBox(height: 12),
-              itemBuilder: (context, index) {
-                return ProductTile(product: filteredProducts[index]);
+          else if (categoriesAsync.hasError || productsAsync.hasError)
+            EmptyStateCard(
+              icon: Icons.cloud_off_rounded,
+              title: 'Catalogue indisponible',
+              message: 'Impossible de charger les articles du serveur.',
+              buttonLabel: 'Réessayer',
+              onPressed: () {
+                ref.invalidate(categoriesProvider);
+                ref.invalidate(productsProvider);
               },
+            )
+          else ...[
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                _FilterChip(label: 'Tous', selected: category == null),
+                for (final item in categories)
+                  _FilterChip(
+                    label: item.name,
+                    selected: category == item.name,
+                    onTap: () => context.go('/search?category=${item.name}'),
+                  ),
+              ],
             ),
+            const SizedBox(height: 22),
+            SectionTitle(
+              title: category == null ? 'Résultats' : category!,
+              actionLabel: '${filteredProducts.length} articles',
+            ),
+            const SizedBox(height: 12),
+            if (filteredProducts.isEmpty)
+              EmptyStateCard(
+                icon: Icons.manage_search_rounded,
+                title: 'Aucun résultat',
+                message:
+                    'Essayez une autre recherche ou parcourez les rayons disponibles.',
+                buttonLabel: 'Voir les rayons',
+                onPressed: () => context.go('/categories'),
+              )
+            else
+              ListView.separated(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                itemCount: filteredProducts.length,
+                separatorBuilder: (_, __) => const SizedBox(height: 12),
+                itemBuilder: (context, index) {
+                  return ProductTile(product: filteredProducts[index]);
+                },
+              ),
+          ],
           const SizedBox(height: 88),
         ],
       ),

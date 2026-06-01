@@ -81,7 +81,9 @@ class CourierOrderService {
       if (order.courierId == user.id) return true;
       final available = order.courierId == null || order.courierId!.isEmpty;
       if (_isClosed(order.status)) return false;
-      return available && !refusedOrderIds.contains(order.id);
+      return available &&
+          _isAvailableForCourier(order.status) &&
+          !refusedOrderIds.contains(order.id);
     }).toList();
   }
 
@@ -124,5 +126,9 @@ class CourierOrderService {
 
   bool _isClosed(String status) {
     return status == 'delivered' || status == 'cancelled';
+  }
+
+  bool _isAvailableForCourier(String status) {
+    return status == 'paid' || status == 'confirmed';
   }
 }

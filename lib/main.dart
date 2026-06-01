@@ -4,7 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:sizer/sizer.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'core/theme/djassa_theme.dart';
-import 'core/router/app_router.dart';
+import 'core/router/router_provider.dart';
 import 'presentation/providers/core_providers.dart';
 import 'presentation/providers/auth_provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -17,10 +17,8 @@ void main() async {
     anonKey: 'sb_publishable_BkULCR4lQWjtJzdwkdutEw_xxImMzKa',
   );
 
-  // Initialiser SharedPreferences
   final sharedPreferences = await SharedPreferences.getInstance();
 
-  // Configuration de la barre d'état
   SystemChrome.setSystemUIOverlayStyle(SystemUiOverlayStyle.light);
 
   runApp(
@@ -33,17 +31,27 @@ void main() async {
   );
 }
 
-/// Application principale Djassa
-class DjassaApp extends ConsumerWidget {
+// ✅ ConsumerStatefulWidget pour appeler checkAuthStatus une seule fois
+class DjassaApp extends ConsumerStatefulWidget {
   const DjassaApp({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    // Vérifier l'état d'authentification au démarrage
+  ConsumerState<DjassaApp> createState() => _DjassaAppState();
+}
+
+class _DjassaAppState extends ConsumerState<DjassaApp> {
+  @override
+  void initState() {
+    super.initState();
+    // ✅ Appelé UNE SEULE FOIS au démarrage, jamais à chaque rebuild
     Future.microtask(() {
       ref.read(authNotifierProvider.notifier).checkAuthStatus();
     });
+  }
 
+  @override
+  Widget build(BuildContext context) {
+    final router = ref.watch(goRouterProvider);
     return Sizer(
       builder: (context, orientation, deviceType) {
         return MaterialApp.router(
@@ -51,8 +59,8 @@ class DjassaApp extends ConsumerWidget {
           debugShowCheckedModeBanner: false,
           theme: DjassaTheme.lightTheme,
           darkTheme: DjassaTheme.darkTheme,
-          themeMode: ThemeMode.light, // Mode clair par défaut
-          routerConfig: AppRouter.router,
+          themeMode: ThemeMode.light,
+          routerConfig: router,
         );
       },
     );

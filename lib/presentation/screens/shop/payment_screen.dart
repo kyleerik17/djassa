@@ -1,24 +1,14 @@
-import 'package:djassa/core/services/geniuspay_service.dart';
-import 'package:djassa/presentation/screens/shop/shop_data.dart';
-import 'package:djassa/presentation/widgets/shop/payment_webview.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/theme/djassa_theme.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/core_providers.dart';
+import '../../widgets/shop/payment_ui.dart';
+import '../../widgets/shop/payment_webview.dart';
 import '../../widgets/shop/shop_widgets.dart';
-
-/// Opérateurs Mobile Money disponibles
-const List<Map<String, String>> _providers = [
-  {'label': 'Wave',         'value': 'wave',         'icon': '🌊'},
-  {'label': 'Orange Money', 'value': 'orange_money',  'icon': '🟠'},
-  {'label': 'MTN Money',    'value': 'mtn_money',     'icon': '🟡'},
-  {'label': 'Moov Money',   'value': 'moov_money',    'icon': '🔵'},
-];
+import 'shop_data.dart';
 
 class PaymentScreen extends ConsumerStatefulWidget {
   const PaymentScreen({
@@ -39,219 +29,121 @@ class PaymentScreen extends ConsumerStatefulWidget {
 class _PaymentScreenState extends ConsumerState<PaymentScreen> {
   bool _isLoading = false;
 
-  /// Dialog pour choisir l'opérateur et saisir le numéro Mobile Money.
-  /// Retourne {'phone': ..., 'provider': ...} ou null si annulé.
-  Future<Map<String, String>?> _askPaymentInfo(String? prefilled) async {
-    final controller = TextEditingController(text: prefilled ?? '');
-    String selectedProvider = 'wave';
+  String _friendlyMessage(Object e) {
+    final raw = e is Exception
+        ? e.toString().replaceFirst('Exception: ', '')
+        : 'Erreur inattendue. Veuillez réessayer.';
 
-    return showDialog<Map<String, String>>(
-      context: context,
-      barrierDismissible: false,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setStateDialog) => AlertDialog(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(24),
-          ),
-          title: Row(
-            children: [
-              CircleAvatar(
-                backgroundColor:
-                    DjassaTheme.accentOrange.withValues(alpha: .12),
-                child: const Icon(
-                  Icons.phone_rounded,
-                  color: DjassaTheme.accentOrange,
-                ),
-              ),
-              const SizedBox(width: 12),
-              const Expanded(child: Text('Paiement Mobile Money')),
-            ],
-          ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'Choisissez votre opérateur et entrez le numéro à débiter.',
-                style: TextStyle(fontSize: 13),
-              ),
-              const SizedBox(height: 16),
+    // 🎯 Message spécifique pour GeniusPay down
+    if (raw.contains('503') || raw.contains('Service Unavailable')) {
+      return 'Le service de paiement est temporairement indisponible. Veuillez réessayer dans quelques minutes.';
+    }
 
-              // Sélection de l'opérateur
-              const Text(
-                'Opérateur',
-                style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
-              ),
-              const SizedBox(height: 8),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: _providers.map((p) {
-                  final isSelected = selectedProvider == p['value'];
-                  return GestureDetector(
-                    onTap: () => setStateDialog(
-                        () => selectedProvider = p['value']!),
-                    child: AnimatedContainer(
-                      duration: const Duration(milliseconds: 150),
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 8,
-                      ),
-                      decoration: BoxDecoration(
-                        color: isSelected
-                            ? DjassaTheme.accentOrange.withValues(alpha: .12)
-                            : Colors.grey.shade100,
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(
-                          color: isSelected
-                              ? DjassaTheme.accentOrange
-                              : Colors.grey.shade300,
-                          width: isSelected ? 2 : 1,
-                        ),
-                      ),
-                      child: Text(
-                        '${p['icon']}  ${p['label']}',
-                        style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: isSelected
-                              ? FontWeight.w700
-                              : FontWeight.normal,
-                          color: isSelected
-                              ? DjassaTheme.accentOrange
-                              : Colors.black87,
-                        ),
-                      ),
-                    ),
-                  );
-                }).toList(),
-              ),
-
-              const SizedBox(height: 16),
-
-              // Numéro de téléphone
-              TextField(
-                controller: controller,
-                keyboardType: TextInputType.phone,
-                autofocus: true,
-                decoration: InputDecoration(
-                  labelText: 'Numéro de téléphone',
-                  prefixIcon: const Icon(Icons.phone_outlined),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                  hintText: 'Ex: 07 00 00 00 00',
-                ),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(ctx).pop(null),
-              child: const Text('Annuler'),
-            ),
-            FilledButton(
-              style: FilledButton.styleFrom(
-                backgroundColor: DjassaTheme.accentOrange,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-              ),
-              onPressed: () {
-                final phone = controller.text.trim();
-                if (phone.length < 8) return;
-                Navigator.of(ctx).pop({
-                  'phone':    phone,
-                  'provider': selectedProvider,
-                });
-              },
-              child: const Text('Confirmer'),
-            ),
-          ],
-        ),
-      ),
-    );
+    final isTechnical = raw.contains('FunctionException') ||
+        raw.contains('PostgrestException') ||
+        raw.contains('status:');
+    if (isTechnical) {
+      return 'Échec du paiement. Réessayez ou choisissez un autre moyen.';
+    }
+    return raw;
   }
 
-  Future<void> _openCheckout() async {
-  final user = ref.read(authNotifierProvider).user;
-  if (user == null) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Veuillez vous connecter')),
-    );
-    return;
-  }
+  Future<void> _pay() async {
+    final user = ref.read(authNotifierProvider).user;
+    if (user == null) {
+      context.go('/login');
+      return;
+    }
 
-  final paymentInfo = await _askPaymentInfo(user.phone);
-  if (paymentInfo == null || !mounted) return;
-
-  final phone = paymentInfo['phone']!;
-  final provider = paymentInfo['provider']!;
-
-  setState(() => _isLoading = true);
-  
-  try {
-    final geniusPayService = GeniusPayService(Supabase.instance.client);
-    
-    final result = await geniusPayService.createPayment(
-      orderId: widget.orderId,
-      provider: provider,
-      customerPhone: phone,
-      customerName: user.fullName,
-    );
-
-    if (!mounted) return;
-
-    final paymentSuccess = await Navigator.push<bool>(
+    final saved = ref.read(savedPaymentMethodProvider);
+    final paymentInfo = await showMobileMoneyPaymentDialog(
       context,
-      MaterialPageRoute(
-        builder: (_) => PaymentWebView(
-          paymentUrl: result.checkoutUrl,
-          reference: result.reference,
-          onPaymentSuccess: () {
-            // ✅ Rafraîchir uniquement ordersProvider (le seul qui existe)
-            ref.invalidate(ordersProvider);
-          },
-        ),
-      ),
+      prefilledPhone: saved?.phone ?? user.phone,
+      initialProvider: saved?.provider ?? 'wave',
     );
+    if (paymentInfo == null || !mounted) return;
 
-    if (!mounted) return;
+    final phone = paymentInfo['phone']!;
+    final provider = paymentInfo['provider']!;
 
-    if (paymentSuccess == true) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('✅ Paiement confirmé !'),
-          backgroundColor: Colors.green,
-          duration: Duration(seconds: 3),
+    setState(() => _isLoading = true);
+    try {
+      await ref.read(savedPaymentMethodProvider.notifier).save(
+            provider: provider,
+            phone: phone,
+          );
+
+      final payment = await ref.read(shopServiceProvider).createPayment(
+            orderId: widget.orderId,
+            amount: widget.amount,
+            provider: provider,
+            customerPhone: phone,
+            customerName:
+                user.fullName.trim().isEmpty ? null : user.fullName.trim(),
+          );
+
+      final checkoutUrl = payment['checkout_url'] as String?;
+      final reference = payment['reference']?.toString() ?? '';
+      if (checkoutUrl == null || checkoutUrl.isEmpty) {
+        throw Exception('URL de paiement introuvable.');
+      }
+
+      if (!mounted) return;
+
+      final geniusPay = ref.read(geniusPayServiceProvider);
+      final success = await Navigator.push<bool>(
+        context,
+        MaterialPageRoute(
+          builder: (_) => PaymentWebView(
+            paymentUrl: checkoutUrl,
+            reference: reference,
+            checkStatus: geniusPay.checkPaymentStatus,
+            onPaymentSuccess: () => ref.invalidate(ordersProvider),
+          ),
         ),
       );
-      context.go('/orders');
-    } else if (paymentSuccess == false) {
+
+      if (!mounted) return;
+
+      if (success == true) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('Paiement confirmé. Merci !'),
+            backgroundColor: DjassaTheme.accentGreen,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(14),
+            ),
+          ),
+        );
+        context.go('/orders');
+      } else if (success == false) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('Paiement annulé ou non confirmé.'),
+            backgroundColor: Colors.orange.shade800,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Paiement annulé ou échoué'),
-          backgroundColor: Colors.orange,
+        SnackBar(
+          content: Text(_friendlyMessage(e)),
+          backgroundColor: Colors.red.shade700,
+          behavior: SnackBarBehavior.floating,
         ),
       );
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
     }
-
-  } catch (e) {
-    if (!mounted) return;
-    
-    String message = 'Erreur : $e';
-    if (e.toString().contains('Session invalide')) {
-      message = 'Session expirée, veuillez vous reconnecter';
-    }
-    
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message)),
-    );
-  } finally {
-    if (mounted) setState(() => _isLoading = false);
   }
-}
+
   @override
   Widget build(BuildContext context) {
+    final saved = ref.watch(savedPaymentMethodProvider);
+
     return ShopScaffold(
       currentIndex: 2,
       title: 'Paiement',
@@ -270,16 +162,16 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  widget.orderNumber == null
-                      ? 'Commande confirmée'
-                      : 'Commande ${widget.orderNumber}',
+                  widget.orderNumber != null
+                      ? 'Commande ${widget.orderNumber}'
+                      : 'Finaliser la commande',
                   style: Theme.of(context).textTheme.titleLarge?.copyWith(
                         color: DjassaTheme.primaryWhite,
                       ),
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  'Vous allez être redirigé vers la page de paiement sécurisée GeniusPay.',
+                  'Paiement sécurisé via GeniusPay',
                   style: TextStyle(
                     color: DjassaTheme.primaryWhite.withValues(alpha: .72),
                   ),
@@ -289,12 +181,56 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen> {
                   formatPrice(widget.amount),
                   style: Theme.of(context).textTheme.displaySmall?.copyWith(
                         color: DjassaTheme.accentOrange,
+                        fontWeight: FontWeight.w900,
                       ),
                 ),
               ],
             ),
           ),
-          const SizedBox(height: 24),
+          const SizedBox(height: 16),
+          if (saved != null && saved.isConfigured)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: DjassaTheme.primaryWhite,
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: DjassaTheme.borderMedium),
+              ),
+              child: Row(
+                children: [
+                  CircleAvatar(
+                    backgroundColor:
+                        DjassaTheme.accentOrange.withValues(alpha: .12),
+                    child: const Icon(
+                      Icons.account_balance_wallet_outlined,
+                      color: DjassaTheme.accentOrange,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          paymentProviderLabel(saved.provider),
+                          style:
+                              Theme.of(context).textTheme.titleMedium?.copyWith(
+                                    fontWeight: FontWeight.w800,
+                                  ),
+                        ),
+                        Text(saved.phone),
+                      ],
+                    ),
+                  ),
+                  TextButton(
+                    onPressed: _isLoading ? null : _pay,
+                    child: const Text('Modifier'),
+                  ),
+                ],
+              ),
+            ),
+          const SizedBox(height: 12),
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
@@ -318,15 +254,16 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Paiement sécurisé',
+                        'Moyens acceptés',
                         style:
                             Theme.of(context).textTheme.titleMedium?.copyWith(
                                   fontWeight: FontWeight.w800,
                                 ),
                       ),
                       const SizedBox(height: 4),
-                      const Text(
-                        'Wave · Orange Money · MTN · Moov · Carte bancaire',
+                      Text(
+                        'Wave · Orange Money · MTN · Moov',
+                        style: Theme.of(context).textTheme.bodySmall,
                       ),
                     ],
                   ),
@@ -334,7 +271,12 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen> {
               ],
             ),
           ),
-          const Spacer(),
+
+          // ✅ CORRECTION : Spacer() remplacé par SizedBox fixe
+          // Dans un SingleChildScrollView/Viewport, la hauteur est infinie.
+          // Spacer() ne peut pas calculer sa taille dans un espace infini → CRASH
+          const SizedBox(height: 40),
+
           SizedBox(
             width: double.infinity,
             child: FilledButton.icon(
@@ -345,7 +287,7 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen> {
                   borderRadius: BorderRadius.circular(18),
                 ),
               ),
-              onPressed: _isLoading ? null : _openCheckout,
+              onPressed: _isLoading ? null : _pay,
               icon: _isLoading
                   ? const SizedBox(
                       width: 18,
@@ -355,9 +297,9 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen> {
                         color: Colors.white,
                       ),
                     )
-                  : const Icon(Icons.open_in_browser_rounded),
+                  : const Icon(Icons.lock_rounded),
               label: Text(
-                _isLoading ? 'Ouverture...' : 'Payer maintenant',
+                _isLoading ? 'Ouverture…' : 'Payer maintenant',
               ),
             ),
           ),

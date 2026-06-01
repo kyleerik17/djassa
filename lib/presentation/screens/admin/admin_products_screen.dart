@@ -42,7 +42,7 @@ class _AdminProductsScreenState extends ConsumerState<AdminProductsScreen>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
+    _tabController = TabController(length: 3, vsync: this);
     _searchController.addListener(() {
       setState(() => _query = _searchController.text.trim().toLowerCase());
     });
@@ -73,10 +73,14 @@ class _AdminProductsScreenState extends ConsumerState<AdminProductsScreen>
           tabController: _tabController,
           searchController: _searchController,
           query: _query,
-          onCreate: _openCreateSheet,
+          onCreateProduct: _openCreateSheet,
           onEdit: _openEditSheet,
           onToggleActive: _toggleActive,
           onDelete: _deleteProduct,
+          onCreateCategory: _openCreateCategorySheet,
+          onEditCategory: _openEditCategorySheet,
+          onToggleCategoryActive: _toggleCategoryActive,
+          onDeleteCategory: _deleteCategory,
           onSendNotif: _openNotifDialog,
           onDeleteNotif: _deleteNotif,
         );
@@ -176,7 +180,7 @@ class _AdminProductsScreenState extends ConsumerState<AdminProductsScreen>
       final categories = await ref.read(adminCategoriesProvider.future);
       if (categories.isEmpty && mounted) {
         _showSnack(
-          'Créez au moins un rayon dans Supabase avant d\'ajouter un article.',
+          'Créez au moins un rayon dans l\'onglet Rayons avant d\'ajouter un article.',
           isError: true,
         );
         return null;
@@ -229,12 +233,89 @@ class _AdminProductsScreenState extends ConsumerState<AdminProductsScreen>
     );
   }
 
+  // ── Rayons ───────────────────────────────────────────────
+
+  Future<void> _openCreateCategorySheet() async {
+    final input = await showModalBottomSheet<AdminCategoryInput>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => const AdminCategoryFormSheet(),
+    );
+
+    if (input == null) return;
+    await _runMutation(
+      successMessage: 'Rayon ajouté au catalogue.',
+      action: () => ref.read(adminServiceProvider).createCategory(input),
+    );
+  }
+
+  Future<void> _openEditCategorySheet(AdminCategory category) async {
+    final input = await showModalBottomSheet<AdminCategoryInput>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => AdminCategoryFormSheet(category: category),
+    );
+
+    if (input == null) return;
+    await _runMutation(
+      successMessage: 'Rayon mis à jour.',
+      action: () => ref
+          .read(adminServiceProvider)
+          .updateCategory(id: category.id, input: input),
+    );
+  }
+
+  Future<void> _toggleCategoryActive(AdminCategory category) async {
+    await _runMutation(
+      successMessage:
+          category.isActive ? 'Rayon archivé.' : 'Rayon remis en ligne.',
+      action: () => ref.read(adminServiceProvider).setCategoryActive(
+            id: category.id,
+            isActive: !category.isActive,
+          ),
+    );
+  }
+
+  Future<void> _deleteCategory(AdminCategory category) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Supprimer définitivement ?'),
+        content: Text(
+          '"${category.name}" sera supprimé. Les articles liés passeront en sans rayon.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Annuler'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Supprimer'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    await _runMutation(
+      successMessage: 'Rayon supprimé.',
+      action: () => ref.read(adminServiceProvider).deleteCategory(category.id),
+    );
+  }
+
   Future<void> _runMutation({
     required String successMessage,
     required Future<dynamic> Function() action,
   }) async {
     try {
       await action();
+      ref.invalidate(adminCategoriesProvider);
+      ref.invalidate(categoriesProvider);
       ref.invalidate(adminProductsProvider);
       ref.invalidate(productsProvider);
       if (mounted) _showSnack(successMessage);
@@ -263,10 +344,14 @@ class _AdminTabView extends ConsumerWidget {
     required this.tabController,
     required this.searchController,
     required this.query,
-    required this.onCreate,
+    required this.onCreateProduct,
     required this.onEdit,
     required this.onToggleActive,
     required this.onDelete,
+    required this.onCreateCategory,
+    required this.onEditCategory,
+    required this.onToggleCategoryActive,
+    required this.onDeleteCategory,
     required this.onSendNotif,
     required this.onDeleteNotif,
   });
@@ -274,10 +359,14 @@ class _AdminTabView extends ConsumerWidget {
   final TabController tabController;
   final TextEditingController searchController;
   final String query;
-  final VoidCallback onCreate;
+  final VoidCallback onCreateProduct;
   final ValueChanged<AdminProduct> onEdit;
   final ValueChanged<AdminProduct> onToggleActive;
   final ValueChanged<AdminProduct> onDelete;
+  final VoidCallback onCreateCategory;
+  final ValueChanged<AdminCategory> onEditCategory;
+  final ValueChanged<AdminCategory> onToggleCategoryActive;
+  final ValueChanged<AdminCategory> onDeleteCategory;
   final VoidCallback onSendNotif;
   final ValueChanged<String> onDeleteNotif;
 
@@ -314,7 +403,10 @@ class _AdminTabView extends ConsumerWidget {
                     tooltip: 'Actualiser',
                     icon: const Icon(Icons.refresh_rounded),
                     onPressed: () {
+                      ref.invalidate(adminCategoriesProvider);
                       ref.invalidate(adminProductsProvider);
+                      ref.invalidate(categoriesProvider);
+                      ref.invalidate(productsProvider);
                       ref.invalidate(_notificationsProvider);
                     },
                   ),
@@ -347,7 +439,18 @@ class _AdminTabView extends ConsumerWidget {
                       children: [
                         Icon(Icons.inventory_2_rounded, size: 16),
                         SizedBox(width: 6),
-                        Text('Catalogue',
+                        Text('Articles',
+                            style: TextStyle(fontWeight: FontWeight.w700)),
+                      ],
+                    ),
+                  ),
+                  const Tab(
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.grid_view_rounded, size: 16),
+                        SizedBox(width: 6),
+                        Text('Rayons',
                             style: TextStyle(fontWeight: FontWeight.w700)),
                       ],
                     ),
@@ -395,10 +498,17 @@ class _AdminTabView extends ConsumerWidget {
                   _CatalogueTab(
                     searchController: searchController,
                     query: query,
-                    onCreate: onCreate,
+                    onCreate: onCreateProduct,
                     onEdit: onEdit,
                     onToggleActive: onToggleActive,
                     onDelete: onDelete,
+                  ),
+
+                  _CategoriesTab(
+                    onCreate: onCreateCategory,
+                    onEdit: onEditCategory,
+                    onToggleActive: onToggleCategoryActive,
+                    onDelete: onDeleteCategory,
                   ),
 
                   // Onglet Notifications
@@ -417,12 +527,25 @@ class _AdminTabView extends ConsumerWidget {
       floatingActionButton: ListenableBuilder(
         listenable: tabController,
         builder: (_, __) {
-          final isNotifTab = tabController.index == 1;
+          final isCategoryTab = tabController.index == 1;
+          final isNotifTab = tabController.index == 2;
           return FloatingActionButton.extended(
             backgroundColor: DjassaTheme.accentOrange,
-            onPressed: isNotifTab ? onSendNotif : onCreate,
-            icon: Icon(isNotifTab ? Icons.send_rounded : Icons.add_rounded),
-            label: Text(isNotifTab ? 'Envoyer' : 'Ajouter'),
+            onPressed: isNotifTab
+                ? onSendNotif
+                : isCategoryTab
+                    ? onCreateCategory
+                    : onCreateProduct,
+            icon: Icon(isNotifTab
+                ? Icons.send_rounded
+                : isCategoryTab
+                    ? Icons.grid_view_rounded
+                    : Icons.add_rounded),
+            label: Text(isNotifTab
+                ? 'Envoyer'
+                : isCategoryTab
+                    ? 'Rayon'
+                    : 'Article'),
           );
         },
       ),
@@ -513,6 +636,110 @@ class _CatalogueTab extends ConsumerWidget {
                       onEdit: () => onEdit(product),
                       onToggleActive: () => onToggleActive(product),
                       onDelete: () => onDelete(product),
+                    ),
+                  ),
+                ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+}
+
+// ── Onglet Rayons ─────────────────────────────────────────────
+
+class _CategoriesTab extends ConsumerWidget {
+  const _CategoriesTab({
+    required this.onCreate,
+    required this.onEdit,
+    required this.onToggleActive,
+    required this.onDelete,
+  });
+
+  final VoidCallback onCreate;
+  final ValueChanged<AdminCategory> onEdit;
+  final ValueChanged<AdminCategory> onToggleActive;
+  final ValueChanged<AdminCategory> onDelete;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final categoriesAsync = ref.watch(adminCategoriesProvider);
+
+    return RefreshIndicator(
+      onRefresh: () async {
+        ref.invalidate(adminCategoriesProvider);
+        ref.invalidate(categoriesProvider);
+        await ref.read(adminCategoriesProvider.future);
+      },
+      child: categoriesAsync.when(
+        loading: () => const Center(child: CircularProgressIndicator()),
+        error: (error, _) => _ErrorCard(
+          title: 'Rayons indisponibles',
+          message: '$error',
+        ),
+        data: (categories) {
+          final active = categories.where((c) => c.isActive).length;
+
+          return ListView(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 120),
+            children: [
+              const SizedBox(height: 8),
+              _CategoryHeroHeader(onCreate: onCreate),
+              const SizedBox(height: 16),
+              SizedBox(
+                height: 122,
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: _StatCard(
+                        label: 'Rayons',
+                        value: '${categories.length}',
+                        icon: Icons.grid_view_outlined,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: _StatCard(
+                        label: 'En ligne',
+                        value: '$active',
+                        icon: Icons.visibility_rounded,
+                        color: DjassaTheme.accentGreen,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      '${categories.length} rayon${categories.length > 1 ? 's' : ''}',
+                      style: Theme.of(context)
+                          .textTheme
+                          .titleLarge
+                          ?.copyWith(fontWeight: FontWeight.w800),
+                    ),
+                  ),
+                  Text(
+                    'Gestion catégories',
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              if (categories.isEmpty)
+                _EmptyCategoryList(onCreate: onCreate)
+              else
+                ...categories.map(
+                  (category) => Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: _AdminCategoryCard(
+                      category: category,
+                      onEdit: () => onEdit(category),
+                      onToggleActive: () => onToggleActive(category),
+                      onDelete: () => onDelete(category),
                     ),
                   ),
                 ),
@@ -1007,6 +1234,86 @@ class _HeroHeader extends StatelessWidget {
   }
 }
 
+class _CategoryHeroHeader extends StatelessWidget {
+  const _CategoryHeroHeader({required this.onCreate});
+  final VoidCallback onCreate;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(22),
+      decoration: BoxDecoration(
+        color: DjassaTheme.primaryBlack,
+        borderRadius: BorderRadius.circular(30),
+        boxShadow: DjassaTheme.shadowHeavy,
+      ),
+      child: Stack(
+        children: [
+          Positioned(
+            right: -18,
+            bottom: -34,
+            child: Icon(
+              Icons.grid_view_rounded,
+              size: 136,
+              color: DjassaTheme.primaryWhite.withValues(alpha: .07),
+            ),
+          ),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                decoration: BoxDecoration(
+                  color: DjassaTheme.accentOrange,
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: const Text(
+                  'Admin rayons',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w800,
+                    fontSize: 12,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 18),
+              Text(
+                'Créez vos catégories depuis l’app',
+                style: Theme.of(context)
+                    .textTheme
+                    .displaySmall
+                    ?.copyWith(color: DjassaTheme.primaryWhite, height: 1.06),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Les rayons publiés s’affichent directement dans la boutique.',
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: DjassaTheme.primaryWhite.withValues(alpha: .72)),
+              ),
+              const SizedBox(height: 18),
+              FilledButton.icon(
+                style: FilledButton.styleFrom(
+                  backgroundColor: DjassaTheme.accentOrange,
+                  foregroundColor: DjassaTheme.primaryWhite,
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16)),
+                ),
+                onPressed: onCreate,
+                icon: const Icon(Icons.add_rounded),
+                label: const Text('Nouveau rayon'),
+              ),
+            ],
+          ),
+        ],
+      ),
+    ).animate().fadeIn(duration: 280.ms).slideY(begin: .04, end: 0);
+  }
+}
+
 class _StatsGrid extends StatelessWidget {
   const _StatsGrid({required this.products});
   final List<AdminProduct> products;
@@ -1259,6 +1566,160 @@ class _AdminProductCard extends StatelessWidget {
   }
 }
 
+class _AdminCategoryCard extends StatelessWidget {
+  const _AdminCategoryCard({
+    required this.category,
+    required this.onEdit,
+    required this.onToggleActive,
+    required this.onDelete,
+  });
+
+  final AdminCategory category;
+  final VoidCallback onEdit;
+  final VoidCallback onToggleActive;
+  final VoidCallback onDelete;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: DjassaTheme.primaryWhite,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(
+          color: category.isActive
+              ? DjassaTheme.borderMedium
+              : Colors.red.withValues(alpha: .25),
+        ),
+        boxShadow: DjassaTheme.shadowLight,
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 64,
+            height: 64,
+            decoration: BoxDecoration(
+              color: DjassaTheme.accentOrange.withValues(alpha: .12),
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Icon(
+              _categoryIconFromName(category.iconName),
+              color: DjassaTheme.accentOrange,
+              size: 30,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 6,
+                  children: [
+                    _Chip(
+                      label: category.isActive ? 'En ligne' : 'Archivé',
+                      color: category.isActive
+                          ? DjassaTheme.accentGreen
+                          : Colors.red,
+                    ),
+                    _Chip(
+                      label: 'Ordre ${category.sortOrder}',
+                      color: DjassaTheme.primaryBlack,
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  category.name,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context)
+                      .textTheme
+                      .titleMedium
+                      ?.copyWith(fontWeight: FontWeight.w900),
+                ),
+                if (category.subtitle.trim().isNotEmpty) ...[
+                  const SizedBox(height: 5),
+                  Text(
+                    category.subtitle,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                ],
+              ],
+            ),
+          ),
+          PopupMenuButton<String>(
+            onSelected: (value) {
+              switch (value) {
+                case 'edit':
+                  onEdit();
+                  break;
+                case 'toggle':
+                  onToggleActive();
+                  break;
+                case 'delete':
+                  onDelete();
+                  break;
+              }
+            },
+            itemBuilder: (context) => [
+              const PopupMenuItem(value: 'edit', child: Text('Modifier')),
+              PopupMenuItem(
+                value: 'toggle',
+                child: Text(
+                  category.isActive ? 'Archiver' : 'Mettre en ligne',
+                ),
+              ),
+              const PopupMenuDivider(),
+              const PopupMenuItem(value: 'delete', child: Text('Supprimer')),
+            ],
+          ),
+        ],
+      ),
+    ).animate().fadeIn(duration: 240.ms).slideX(begin: .03, end: 0);
+  }
+
+  IconData _categoryIconFromName(String value) {
+    switch (value) {
+      case 'devices':
+        return Icons.devices_rounded;
+      case 'home':
+        return Icons.home_rounded;
+      case 'checkroom':
+        return Icons.checkroom_rounded;
+      case 'spa':
+        return Icons.spa_rounded;
+      case 'sports_soccer':
+        return Icons.sports_soccer_rounded;
+      case 'settings':
+      case 'moteur':
+        return Icons.settings;
+      case 'brake':
+        return Icons.motion_photos_pause;
+      case 'car_repair':
+        return Icons.car_repair;
+      case 'electric_bolt':
+      case 'battery':
+        return Icons.electric_bolt;
+      case 'oil':
+        return Icons.opacity;
+      case 'suspension':
+        return Icons.vertical_align_center;
+      case 'light':
+        return Icons.light_mode;
+      case 'tire':
+        return Icons.trip_origin;
+      case 'category':
+      default:
+        return Icons.category_rounded;
+    }
+  }
+}
+
 class _Chip extends StatelessWidget {
   const _Chip({required this.label, required this.color});
   final String label;
@@ -1309,6 +1770,44 @@ class _EmptyAdminList extends StatelessWidget {
             onPressed: onCreate,
             icon: const Icon(Icons.add_rounded),
             label: const Text('Créer un article')),
+      ]),
+    );
+  }
+}
+
+class _EmptyCategoryList extends StatelessWidget {
+  const _EmptyCategoryList({required this.onCreate});
+  final VoidCallback onCreate;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+          color: DjassaTheme.primaryWhite,
+          borderRadius: BorderRadius.circular(28),
+          border: Border.all(color: DjassaTheme.borderMedium)),
+      child: Column(children: [
+        const CircleAvatar(
+          radius: 34,
+          backgroundColor: Color(0xFFFFF0E3),
+          child: Icon(Icons.grid_view_outlined,
+              color: DjassaTheme.accentOrange, size: 32),
+        ),
+        const SizedBox(height: 14),
+        Text('Aucun rayon', style: Theme.of(context).textTheme.titleLarge),
+        const SizedBox(height: 6),
+        Text(
+          'Créez votre première catégorie avant d’ajouter des articles.',
+          textAlign: TextAlign.center,
+          style: Theme.of(context).textTheme.bodyMedium,
+        ),
+        const SizedBox(height: 16),
+        FilledButton.icon(
+            onPressed: onCreate,
+            icon: const Icon(Icons.add_rounded),
+            label: const Text('Créer un rayon')),
       ]),
     );
   }
@@ -1388,7 +1887,219 @@ class _ErrorCard extends StatelessWidget {
   }
 }
 
-// Widgets de formulaire produit (inchangés)
+class AdminCategoryFormSheet extends StatefulWidget {
+  const AdminCategoryFormSheet({
+    super.key,
+    this.category,
+  });
+
+  final AdminCategory? category;
+
+  @override
+  State<AdminCategoryFormSheet> createState() => _AdminCategoryFormSheetState();
+}
+
+class _AdminCategoryFormSheetState extends State<AdminCategoryFormSheet> {
+  final _formKey = GlobalKey<FormState>();
+  late final TextEditingController _nameController;
+  late final TextEditingController _subtitleController;
+  late final TextEditingController _sortOrderController;
+  String _iconName = 'category';
+  bool _isActive = true;
+
+  static const _icons = [
+    'category',
+    'devices',
+    'home',
+    'checkroom',
+    'spa',
+    'sports_soccer',
+    'car_repair',
+    'settings',
+    'electric_bolt',
+    'oil',
+    'tire',
+  ];
+
+  @override
+  void initState() {
+    super.initState();
+    final category = widget.category;
+    _nameController = TextEditingController(text: category?.name ?? '');
+    _subtitleController = TextEditingController(text: category?.subtitle ?? '');
+    _sortOrderController = TextEditingController(
+      text: category == null ? '0' : '${category.sortOrder}',
+    );
+    _iconName =
+        _icons.contains(category?.iconName) ? category!.iconName : 'category';
+    _isActive = category?.isActive ?? true;
+  }
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _subtitleController.dispose();
+    _sortOrderController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final bottomInset = MediaQuery.of(context).viewInsets.bottom;
+    final isEditing = widget.category != null;
+
+    return Padding(
+      padding: EdgeInsets.only(bottom: bottomInset),
+      child: DraggableScrollableSheet(
+        expand: false,
+        initialChildSize: .72,
+        minChildSize: .58,
+        maxChildSize: .9,
+        builder: (context, scrollController) => Container(
+          decoration: const BoxDecoration(
+            color: DjassaTheme.backgroundSecondary,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(30)),
+          ),
+          child: Form(
+            key: _formKey,
+            child: ListView(
+              controller: scrollController,
+              padding: const EdgeInsets.fromLTRB(16, 10, 16, 24),
+              children: [
+                Center(
+                  child: Container(
+                    width: 42,
+                    height: 5,
+                    decoration: BoxDecoration(
+                      color: DjassaTheme.borderLight,
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 18),
+                Row(children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          isEditing ? 'Modifier le rayon' : 'Nouveau rayon',
+                          style: Theme.of(context)
+                              .textTheme
+                              .displaySmall
+                              ?.copyWith(height: 1.05),
+                        ),
+                        const SizedBox(height: 5),
+                        Text(
+                          'Ces informations organisent le catalogue côté client.',
+                          style: Theme.of(context).textTheme.bodyMedium,
+                        ),
+                      ],
+                    ),
+                  ),
+                  IconButton.filledTonal(
+                      onPressed: () => Navigator.of(context).pop(),
+                      icon: const Icon(Icons.close_rounded)),
+                ]),
+                const SizedBox(height: 18),
+                _FormSection(title: 'Informations du rayon', children: [
+                  TextFormField(
+                    controller: _nameController,
+                    textInputAction: TextInputAction.next,
+                    decoration: const InputDecoration(
+                      labelText: 'Nom du rayon',
+                      prefixIcon: Icon(Icons.grid_view_rounded),
+                    ),
+                    validator: (value) => value == null || value.trim().isEmpty
+                        ? 'Nom obligatoire'
+                        : null,
+                  ),
+                  const SizedBox(height: 12),
+                  TextFormField(
+                    controller: _subtitleController,
+                    minLines: 2,
+                    maxLines: 3,
+                    decoration: const InputDecoration(
+                      labelText: 'Description courte',
+                      alignLabelWithHint: true,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Row(children: [
+                    Expanded(
+                      child: _NumberField(
+                        controller: _sortOrderController,
+                        label: 'Ordre',
+                        requiredField: true,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: DropdownButtonFormField<String>(
+                        initialValue: _iconName,
+                        decoration: const InputDecoration(
+                          labelText: 'Icône',
+                          prefixIcon: Icon(Icons.category_outlined),
+                        ),
+                        items: _icons
+                            .map((icon) => DropdownMenuItem(
+                                  value: icon,
+                                  child: Text(icon),
+                                ))
+                            .toList(),
+                        onChanged: (value) =>
+                            setState(() => _iconName = value ?? 'category'),
+                      ),
+                    ),
+                  ]),
+                  const SizedBox(height: 8),
+                  SwitchListTile.adaptive(
+                    contentPadding: EdgeInsets.zero,
+                    title: const Text('Publier dans la boutique'),
+                    subtitle: Text(_isActive
+                        ? 'Le rayon est visible par les clients'
+                        : 'Le rayon reste archivé'),
+                    value: _isActive,
+                    onChanged: (value) => setState(() => _isActive = value),
+                  ),
+                ]),
+                const SizedBox(height: 18),
+                SizedBox(
+                  width: double.infinity,
+                  child: FilledButton.icon(
+                    style: FilledButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(18),
+                      ),
+                    ),
+                    onPressed: _submit,
+                    icon: Icon(
+                        isEditing ? Icons.save_rounded : Icons.add_rounded),
+                    label: Text(isEditing ? 'Enregistrer' : 'Ajouter le rayon'),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _submit() {
+    if (!_formKey.currentState!.validate()) return;
+    Navigator.of(context).pop(AdminCategoryInput(
+      name: _nameController.text,
+      subtitle: _subtitleController.text,
+      iconName: _iconName,
+      sortOrder: int.parse(_sortOrderController.text),
+      isActive: _isActive,
+    ));
+  }
+}
+
+// Widgets de formulaire produit
 class AdminProductFormSheet extends StatefulWidget {
   const AdminProductFormSheet({
     super.key,

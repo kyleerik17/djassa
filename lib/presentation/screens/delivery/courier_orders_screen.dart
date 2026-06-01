@@ -146,11 +146,11 @@ class _CourierOrdersScreenState extends ConsumerState<CourierOrdersScreen> {
   }
 
   String get _title => switch (_index) {
-    0 => 'Accueil livreur',
-    1 => 'Commandes',
-    2 => 'Historique',
-    _ => 'Profil livreur',
-  };
+        0 => 'Accueil livreur',
+        1 => 'Commandes',
+        2 => 'Historique',
+        _ => 'Profil livreur',
+      };
 
   Future<void> _logout(BuildContext context) async {
     await ref.read(authNotifierProvider.notifier).logoutUser();
@@ -183,9 +183,7 @@ class _CourierHomeTab extends ConsumerWidget {
         .where((o) => o.courierId == userId && o.status == 'delivered')
         .length;
     final current = active.isEmpty ? null : active.first;
-    final profile = ref
-        .watch(courierProfileProvider)
-        .maybeWhen(
+    final profile = ref.watch(courierProfileProvider).maybeWhen(
           data: (value) => value,
           orElse: () => const CourierProfile(),
         );
@@ -249,9 +247,7 @@ class _CourierOrdersTab extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final profile = ref
-        .watch(courierProfileProvider)
-        .maybeWhen(
+    final profile = ref.watch(courierProfileProvider).maybeWhen(
           data: (value) => value,
           orElse: () => const CourierProfile(),
         );
@@ -300,9 +296,8 @@ class _CourierOrdersTab extends ConsumerWidget {
               (order) => _CourierOrderCard(
                 order: order,
                 profileComplete: profileComplete,
-                onAccept: profileComplete
-                    ? () => _accept(context, ref, order)
-                    : null,
+                onAccept:
+                    profileComplete ? () => _accept(context, ref, order) : null,
                 onRefuse: () => _refuse(context, ref, order),
               ),
             ),
@@ -317,9 +312,8 @@ class _CourierOrdersTab extends ConsumerWidget {
     CourierOrder order,
   ) async {
     try {
-      final accepted = await ref
-          .read(courierOrderServiceProvider)
-          .acceptOrder(order.id);
+      final accepted =
+          await ref.read(courierOrderServiceProvider).acceptOrder(order.id);
       ref.invalidate(courierOrdersProvider);
       if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -508,6 +502,7 @@ class _CourierProfileTabState extends ConsumerState<_CourierProfileTab> {
   String _licensePhotoUrl = '';
   bool _isAvailable = true;
   bool _initialized = false;
+  bool _editingProfile = false;
   bool _saving = false;
 
   @override
@@ -531,14 +526,13 @@ class _CourierProfileTabState extends ConsumerState<_CourierProfileTab> {
           _licenseNumber.text = profile.licenseNumber;
           _vehiclePlate.text = profile.vehiclePlate;
           _emergencyPhone.text = profile.emergencyPhone;
-          _licenseType = profile.licenseType.isEmpty
-              ? 'A'
-              : profile.licenseType;
-          _vehicleType = profile.vehicleType.isEmpty
-              ? 'Moto'
-              : profile.vehicleType;
+          _licenseType =
+              profile.licenseType.isEmpty ? 'A' : profile.licenseType;
+          _vehicleType =
+              profile.vehicleType.isEmpty ? 'Moto' : profile.vehicleType;
           _licensePhotoUrl = profile.licensePhotoUrl;
           _isAvailable = profile.isAvailable;
+          _editingProfile = !profile.isProfileComplete;
           _initialized = true;
         }
 
@@ -553,24 +547,32 @@ class _CourierProfileTabState extends ConsumerState<_CourierProfileTab> {
               avatarUrl: user?.avatarUrl,
             ),
             const SizedBox(height: 18),
-            Form(
-              key: _formKey,
-              child: _CourierProfileForm(
-                licenseNumber: _licenseNumber,
-                vehiclePlate: _vehiclePlate,
-                emergencyPhone: _emergencyPhone,
-                licenseType: _licenseType,
-                vehicleType: _vehicleType,
-                licensePhotoUrl: _licensePhotoUrl,
+            if (_editingProfile)
+              Form(
+                key: _formKey,
+                child: _CourierProfileForm(
+                  licenseNumber: _licenseNumber,
+                  vehiclePlate: _vehiclePlate,
+                  emergencyPhone: _emergencyPhone,
+                  licenseType: _licenseType,
+                  vehicleType: _vehicleType,
+                  licensePhotoUrl: _licensePhotoUrl,
+                  isAvailable: _isAvailable,
+                  saving: _saving,
+                  onLicenseTypeChanged: (v) => setState(() => _licenseType = v),
+                  onVehicleTypeChanged: (v) => setState(() => _vehicleType = v),
+                  onAvailabilityChanged: (v) =>
+                      setState(() => _isAvailable = v),
+                  onPhotoUrlChanged: (v) =>
+                      setState(() => _licensePhotoUrl = v),
+                  onSave: _save,
+                ),
+              )
+            else
+              _CourierProfileSavedCard(
                 isAvailable: _isAvailable,
-                saving: _saving,
-                onLicenseTypeChanged: (v) => setState(() => _licenseType = v),
-                onVehicleTypeChanged: (v) => setState(() => _vehicleType = v),
-                onAvailabilityChanged: (v) => setState(() => _isAvailable = v),
-                onPhotoUrlChanged: (v) => setState(() => _licensePhotoUrl = v),
-                onSave: _save,
+                onEdit: () => setState(() => _editingProfile = true),
               ),
-            ),
             const SizedBox(height: 14),
             OutlinedButton.icon(
               onPressed: widget.onLogout,
@@ -587,9 +589,7 @@ class _CourierProfileTabState extends ConsumerState<_CourierProfileTab> {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _saving = true);
     try {
-      await ref
-          .read(courierProfileServiceProvider)
-          .save(
+      await ref.read(courierProfileServiceProvider).save(
             CourierProfile(
               licenseNumber: _licenseNumber.text,
               licenseType: _licenseType,
@@ -602,6 +602,7 @@ class _CourierProfileTabState extends ConsumerState<_CourierProfileTab> {
           );
       ref.invalidate(courierProfileProvider);
       if (!mounted) return;
+      setState(() => _editingProfile = false);
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           backgroundColor: Colors.green,
@@ -786,6 +787,78 @@ class _CourierProfileForm extends StatelessWidget {
 // Widget photo picker - CORRIGÉ ✅
 // ---------------------------------------------------------------------------
 
+class _CourierProfileSavedCard extends StatelessWidget {
+  const _CourierProfileSavedCard({
+    required this.isAvailable,
+    required this.onEdit,
+  });
+
+  final bool isAvailable;
+  final VoidCallback onEdit;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: DjassaTheme.primaryWhite,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: DjassaTheme.borderMedium),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              CircleAvatar(
+                backgroundColor: Colors.green.withValues(alpha: .12),
+                child: const Icon(
+                  Icons.verified_user_rounded,
+                  color: Colors.green,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Profil livreur enregistré',
+                      style: Theme.of(context)
+                          .textTheme
+                          .titleMedium
+                          ?.copyWith(fontWeight: FontWeight.w900),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      isAvailable
+                          ? 'Vous êtes disponible pour les livraisons.'
+                          : 'Vous êtes actuellement indisponible.',
+                      style: TextStyle(
+                        color: DjassaTheme.textSecondary,
+                        fontSize: 13,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: onEdit,
+              icon: const Icon(Icons.edit_rounded),
+              label: const Text('Modifier profil'),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _PhotoPickerField extends StatefulWidget {
   const _PhotoPickerField({required this.currentUrl, required this.onPicked});
 
@@ -820,17 +893,17 @@ class _PhotoPickerFieldState extends State<_PhotoPickerField> {
       }
 
       // ✅ Path sécurisé : licenses/{user_id}/{timestamp}.{ext}
+      const bucket = 'courier-documents';
+      final contentType = ext == 'jpg' ? 'image/jpeg' : 'image/$ext';
       final path =
-          'licenses/${user.id}/${DateTime.now().millisecondsSinceEpoch}.$ext';
+          '${user.id}/licenses/${DateTime.now().millisecondsSinceEpoch}.$ext';
 
       // ✅ Upload avec upsert:true pour permettre la réécriture
-      await SupabaseService.client.storage
-          .from('documents')
-          .uploadBinary(
+      await SupabaseService.client.storage.from(bucket).uploadBinary(
             path,
             bytes,
             fileOptions: FileOptions(
-              contentType: 'image/$ext',
+              contentType: contentType,
               upsert: true,
               cacheControl: '3600',
             ),
@@ -838,7 +911,7 @@ class _PhotoPickerFieldState extends State<_PhotoPickerField> {
 
       // ✅ Pour bucket PRIVÉ : utiliser createSignedUrl au lieu de getPublicUrl
       final url = await SupabaseService.client.storage
-          .from('documents')
+          .from(bucket)
           .createSignedUrl(path, 60 * 60 * 24 * 30); // URL valable 30 jours
 
       widget.onPicked(url);
@@ -881,16 +954,16 @@ class _PhotoPickerFieldState extends State<_PhotoPickerField> {
   /// Traduit les erreurs StorageException en messages utilisateur clairs
   String _getStorageErrorMessage(StorageException e) {
     final code = e.statusCode;
-    final message = e.message?.toLowerCase() ?? '';
+    final message = e.message.toLowerCase();
 
-    if (code == 404 ||
+    if (code == '404' ||
         message.contains('bucket') && message.contains('not found')) {
-      return 'Bucket "documents" introuvable. Contactez un administrateur pour créer le bucket.';
+      return 'Bucket "courier-documents" introuvable. Contactez un administrateur pour créer le bucket.';
     }
-    if (code == 401 || message.contains('unauthenticated')) {
+    if (code == '401' || message.contains('unauthenticated')) {
       return 'Veuillez vous reconnecter pour uploader une photo.';
     }
-    if (code == 403 ||
+    if (code == '403' ||
         message.contains('policy') ||
         message.contains('permission')) {
       return 'Permissions insuffisantes. Vérifiez les politiques RLS du bucket.';
@@ -901,7 +974,7 @@ class _PhotoPickerFieldState extends State<_PhotoPickerField> {
     if (message.contains('mime') || message.contains('content type')) {
       return 'Format d\'image non supporté. Utilisez PNG, JPG ou WebP.';
     }
-    return 'Erreur upload : ${e.message ?? e.toString()}';
+    return 'Erreur upload : ${e.message}';
   }
 
   void _showSourcePicker(BuildContext context) {
@@ -994,109 +1067,109 @@ class _PhotoPickerFieldState extends State<_PhotoPickerField> {
                   ),
                 )
               : hasPhoto
-              ? Stack(
-                  fit: StackFit.expand,
-                  children: [
-                    // ✅ Image.network fonctionne avec les URL signées
-                    Image.network(
-                      widget.currentUrl,
-                      fit: BoxFit.cover,
-                      headers: {
-                        // Si nécessaire, ajouter des headers d'authentification
-                      },
-                      errorBuilder: (_, __, ___) => const Center(
-                        child: Icon(Icons.broken_image_rounded, size: 48),
-                      ),
-                    ),
-                    Positioned(
-                      bottom: 0,
-                      left: 0,
-                      right: 0,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(vertical: 6),
-                        color: Colors.black.withValues(alpha: .55),
-                        child: const Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(
-                              Icons.edit_rounded,
-                              color: Colors.white,
-                              size: 15,
-                            ),
-                            SizedBox(width: 6),
-                            Text(
-                              'Modifier',
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 12,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                          ],
+                  ? Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        // ✅ Image.network fonctionne avec les URL signées
+                        Image.network(
+                          widget.currentUrl,
+                          fit: BoxFit.cover,
+                          headers: {
+                            // Si nécessaire, ajouter des headers d'authentification
+                          },
+                          errorBuilder: (_, __, ___) => const Center(
+                            child: Icon(Icons.broken_image_rounded, size: 48),
+                          ),
                         ),
-                      ),
-                    ),
-                    Positioned(
-                      top: 8,
-                      right: 8,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 4,
-                        ),
-                        decoration: BoxDecoration(
-                          color: Colors.green,
-                          borderRadius: BorderRadius.circular(999),
-                        ),
-                        child: const Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(
-                              Icons.check_rounded,
-                              color: Colors.white,
-                              size: 13,
+                        Positioned(
+                          bottom: 0,
+                          left: 0,
+                          right: 0,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(vertical: 6),
+                            color: Colors.black.withValues(alpha: .55),
+                            child: const Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(
+                                  Icons.edit_rounded,
+                                  color: Colors.white,
+                                  size: 15,
+                                ),
+                                SizedBox(width: 6),
+                                Text(
+                                  'Modifier',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ],
                             ),
-                            SizedBox(width: 4),
-                            Text(
-                              'Photo ajoutée',
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 11,
-                                fontWeight: FontWeight.w800,
-                              ),
-                            ),
-                          ],
+                          ),
                         ),
-                      ),
+                        Positioned(
+                          top: 8,
+                          right: 8,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 4,
+                            ),
+                            decoration: BoxDecoration(
+                              color: Colors.green,
+                              borderRadius: BorderRadius.circular(999),
+                            ),
+                            child: const Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(
+                                  Icons.check_rounded,
+                                  color: Colors.white,
+                                  size: 13,
+                                ),
+                                SizedBox(width: 4),
+                                Text(
+                                  'Photo ajoutée',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w800,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
+                    )
+                  : Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          Icons.add_a_photo_rounded,
+                          size: 38,
+                          color: Colors.grey.shade500,
+                        ),
+                        const SizedBox(height: 10),
+                        Text(
+                          'Ajouter la photo du permis',
+                          style: TextStyle(
+                            color: Colors.grey.shade600,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          'Galerie ou caméra',
+                          style: TextStyle(
+                            color: Colors.grey.shade400,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ],
                     ),
-                  ],
-                )
-              : Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(
-                      Icons.add_a_photo_rounded,
-                      size: 38,
-                      color: Colors.grey.shade500,
-                    ),
-                    const SizedBox(height: 10),
-                    Text(
-                      'Ajouter la photo du permis',
-                      style: TextStyle(
-                        color: Colors.grey.shade600,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      'Galerie ou caméra',
-                      style: TextStyle(
-                        color: Colors.grey.shade400,
-                        fontSize: 12,
-                      ),
-                    ),
-                  ],
-                ),
         ),
       ),
     );
@@ -1160,9 +1233,9 @@ class _ActiveDeliveryMapCard extends ConsumerWidget {
                     Text(
                       'Livraison en cours',
                       style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                        color: DjassaTheme.primaryWhite,
-                        fontWeight: FontWeight.w900,
-                      ),
+                            color: DjassaTheme.primaryWhite,
+                            fontWeight: FontWeight.w900,
+                          ),
                     ),
                     Text(
                       order.orderNumber,
@@ -1191,9 +1264,8 @@ class _ActiveDeliveryMapCard extends ConsumerWidget {
                 label: snapshot.hasClientRealtime
                     ? 'Client live'
                     : 'Client estimé',
-                color: snapshot.hasClientRealtime
-                    ? Colors.green
-                    : Colors.blueGrey,
+                color:
+                    snapshot.hasClientRealtime ? Colors.green : Colors.blueGrey,
               ),
             ],
           ),
@@ -1203,32 +1275,58 @@ class _ActiveDeliveryMapCard extends ConsumerWidget {
           if (order.customerPhone.isNotEmpty)
             _DarkInfoLine(icon: Icons.phone_rounded, text: order.customerPhone),
           const SizedBox(height: 14),
-          Row(
-            children: [
-              Expanded(
-                child: OutlinedButton.icon(
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: DjassaTheme.primaryWhite,
-                    side: BorderSide(
-                      color: DjassaTheme.primaryWhite.withValues(alpha: .28),
+          if (order.status == 'courier_assigned')
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton.icon(
+                style: FilledButton.styleFrom(
+                  backgroundColor: DjassaTheme.accentOrange,
+                ),
+                onPressed: () => _setStatus(context, ref, 'confirmed'),
+                icon: const Icon(Icons.inventory_2_rounded),
+                label: const Text('Préparation terminée'),
+              ),
+            )
+          else if (order.status == 'confirmed')
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton.icon(
+                style: FilledButton.styleFrom(
+                  backgroundColor: const Color(0xFF1E88E5),
+                ),
+                onPressed: () => _setStatus(context, ref, 'shipping'),
+                icon: const Icon(Icons.delivery_dining_rounded),
+                label: const Text('En cours de livraison'),
+              ),
+            )
+          else if (order.status == 'shipping')
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: DjassaTheme.primaryWhite,
+                      side: BorderSide(
+                        color: DjassaTheme.primaryWhite.withValues(alpha: .28),
+                      ),
                     ),
+                    onPressed: () => _setStatus(context, ref, 'shipping'),
+                    icon: const Icon(Icons.route_rounded),
+                    label: const Text('Toujours en route'),
                   ),
-                  onPressed: () => _setStatus(context, ref, 'shipping'),
-                  icon: const Icon(Icons.route_rounded),
-                  label: const Text('En route'),
                 ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: FilledButton.icon(
-                  style: FilledButton.styleFrom(backgroundColor: Colors.green),
-                  onPressed: () => _setStatus(context, ref, 'delivered'),
-                  icon: const Icon(Icons.verified_rounded),
-                  label: const Text('Livré'),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: FilledButton.icon(
+                    style:
+                        FilledButton.styleFrom(backgroundColor: Colors.green),
+                    onPressed: () => _setStatus(context, ref, 'delivered'),
+                    icon: const Icon(Icons.verified_rounded),
+                    label: const Text('Livré'),
+                  ),
                 ),
-              ),
-            ],
-          ),
+              ],
+            ),
         ],
       ),
     );
@@ -1248,9 +1346,12 @@ class _ActiveDeliveryMapCard extends ConsumerWidget {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            status == 'delivered'
-                ? 'Livraison terminée.'
-                : 'Statut mis à jour.',
+            switch (status) {
+              'delivered' => 'Livraison terminée.',
+              'confirmed' => 'Préparation signalée au client.',
+              'shipping' => 'Livraison en cours — le client est notifié.',
+              _ => 'Statut mis à jour.',
+            },
           ),
         ),
       );
@@ -1311,9 +1412,9 @@ class _CourierDashboardHeader extends StatelessWidget {
                 child: Text(
                   isAvailable ? 'Disponible' : 'Indisponible',
                   style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                    color: DjassaTheme.primaryWhite,
-                    fontWeight: FontWeight.w900,
-                  ),
+                        color: DjassaTheme.primaryWhite,
+                        fontWeight: FontWeight.w900,
+                      ),
                 ),
               ),
               Switch.adaptive(
@@ -1420,9 +1521,9 @@ class _CourierIdentityCard extends ConsumerWidget {
                 Text(
                   name.trim().isEmpty ? 'Livreur Djassa' : name,
                   style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                    color: DjassaTheme.primaryWhite,
-                    fontWeight: FontWeight.w900,
-                  ),
+                        color: DjassaTheme.primaryWhite,
+                        fontWeight: FontWeight.w900,
+                      ),
                 ),
                 const SizedBox(height: 4),
                 Text(
@@ -1539,8 +1640,8 @@ class _HeaderCard extends StatelessWidget {
                 Text(
                   '$availableCount commande(s) disponible(s)',
                   style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                    color: DjassaTheme.primaryWhite,
-                  ),
+                        color: DjassaTheme.primaryWhite,
+                      ),
                 ),
                 const SizedBox(height: 4),
                 Text(
@@ -1553,6 +1654,58 @@ class _HeaderCard extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _CourierStatusButton extends ConsumerWidget {
+  const _CourierStatusButton({
+    required this.label,
+    required this.icon,
+    required this.color,
+    required this.orderId,
+    required this.nextStatus,
+  });
+
+  final String label;
+  final IconData icon;
+  final Color color;
+  final String orderId;
+  final String nextStatus;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return SizedBox(
+      width: double.infinity,
+      child: FilledButton.icon(
+        style: FilledButton.styleFrom(backgroundColor: color),
+        onPressed: () async {
+          try {
+            await ref
+                .read(courierOrderServiceProvider)
+                .updateOrderStatus(orderId, nextStatus);
+            ref.invalidate(courierOrdersProvider);
+            if (!context.mounted) return;
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(
+                  nextStatus == 'confirmed'
+                      ? 'Préparation signalée au client.'
+                      : 'Livraison en cours — le client est notifié.',
+                ),
+                backgroundColor: Colors.green,
+              ),
+            );
+          } catch (e) {
+            if (!context.mounted) return;
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('Erreur : $e')),
+            );
+          }
+        },
+        icon: Icon(icon),
+        label: Text(label),
       ),
     );
   }
@@ -1641,7 +1794,25 @@ class _CourierOrderCard extends StatelessWidget {
                 '${order.itemsCount} article(s) - ${formatPrice(order.total)}',
           ),
           _InfoLine(icon: Icons.info_rounded, text: _statusLabel(order.status)),
-          if (!accepted) ...[
+          if (accepted && order.status == 'courier_assigned') ...[
+            const SizedBox(height: 12),
+            _CourierStatusButton(
+              label: 'Préparation terminée',
+              icon: Icons.inventory_2_rounded,
+              color: DjassaTheme.accentOrange,
+              orderId: order.id,
+              nextStatus: 'confirmed',
+            ),
+          ] else if (accepted && order.status == 'confirmed') ...[
+            const SizedBox(height: 12),
+            _CourierStatusButton(
+              label: 'En cours de livraison',
+              icon: Icons.delivery_dining_rounded,
+              color: const Color(0xFF1E88E5),
+              orderId: order.id,
+              nextStatus: 'shipping',
+            ),
+          ] else if (!accepted) ...[
             const SizedBox(height: 12),
             Row(
               children: [

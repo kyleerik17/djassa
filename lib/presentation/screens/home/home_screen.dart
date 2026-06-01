@@ -3,9 +3,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/theme/djassa_theme.dart';
+import '../../../domain/order_progress.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/core_providers.dart';
-import '../../widgets/shop/delivery_tracking_widgets.dart';
+import '../../widgets/shop/order_progress_celebration.dart';
+import '../../widgets/shop/order_progress_tracker.dart';
 import '../../widgets/shop/shop_widgets.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
@@ -16,27 +18,7 @@ class HomeScreen extends ConsumerStatefulWidget {
 }
 
 class _HomeScreenState extends ConsumerState<HomeScreen> {
-  void _announceStageIfNeeded(
-    DeliveryTracking tracking,
-    DeliveryTrackingStage stage,
-  ) {
-    final notifier = ref.read(deliveryTrackingProvider.notifier);
-    if (notifier.wasStageAnnounced(tracking.orderId, stage)) return;
-
-    WidgetsBinding.instance.addPostFrameCallback((_) async {
-      if (!mounted) return;
-      await notifier.markStageAnnounced(tracking.orderId, stage);
-      if (!mounted) return;
-      await showDeliveryStageDialog(
-        context,
-        tracking: tracking,
-        stage: stage,
-      );
-      if (stage == DeliveryTrackingStage.delivered) {
-        await notifier.clear();
-      }
-    });
-  }
+  String? _lastCelebratedStatus;
 
   @override
   Widget build(BuildContext context) {
@@ -44,157 +26,99 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final user = authState.user;
     final categoriesAsync = ref.watch(categoriesProvider);
     final productsAsync = ref.watch(productsProvider);
-    final tracking = ref.watch(deliveryTrackingProvider);
-    final now = ref.watch(deliveryTrackingClockProvider).maybeWhen(
-          data: (value) => value,
-          orElse: DateTime.now,
-        );
-    final trackingStage = tracking?.stageAt(now);
-    final liveSnapshot = tracking == null
-        ? null
-        : ref.watch(liveDeliveryTrackingProvider(tracking)).maybeWhen(
-              data: (value) => value,
-              orElse: () => null,
-            );
-    final clientGpsStatus = tracking == null
-        ? null
-        : ref.watch(clientLocationPublisherProvider(tracking)).maybeWhen(
-              data: (value) => value,
-              orElse: () => null,
-            );
+    final activeOrderAsync = ref.watch(activeClientOrderProvider);
 
-    if (tracking != null && trackingStage != null) {
-      _announceStageIfNeeded(tracking, trackingStage);
-      if (trackingStage == DeliveryTrackingStage.delivered) {
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          ref.read(deliveryTrackingProvider.notifier).clearIfDelivered();
-        });
+    ref.listen(activeClientOrderProvider, (previous, next) {
+      final order = next.valueOrNull;
+      if (order == null || !mounted) return;
+      final prevStatus = previous?.valueOrNull?.status;
+      if (!OrderProgressInfo.isProgressForward(prevStatus, order.status)) {
+        return;
       }
-    }
+      if (_lastCelebratedStatus == order.status) return;
+      _lastCelebratedStatus = order.status;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        showOrderProgressCelebration(context, status: order.status);
+      });
+    });
 
     return ShopScaffold(
       currentIndex: 0,
-      title: 'Djassa',
+      title: 'Djassa.',
+      darkHeader: true,
+      padding: EdgeInsets.zero,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Bonjour ${user?.fullName ?? 'à vous'} 👋',
-                      style: Theme.of(context).textTheme.titleLarge,
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      'Articles fiables, livraison rapide.',
-                      style: Theme.of(context).textTheme.bodyMedium,
-                    ),
-                  ],
-                ),
-              ),
-              InkWell(
-                borderRadius: BorderRadius.circular(18),
-                onTap: () => context.go('/profile'),
-                child: CircleAvatar(
-                  radius: 25,
-                  backgroundColor:
-                      DjassaTheme.accentOrange.withValues(alpha: .13),
-                  child: const Icon(
-                    Icons.person_rounded,
-                    color: DjassaTheme.accentOrange,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 18),
-          if (tracking != null &&
-              trackingStage != null &&
-              trackingStage != DeliveryTrackingStage.delivered) ...[
-            DeliveryTrackingCard(
-              tracking: tracking,
-              stage: trackingStage,
-              now: now,
-              snapshot: liveSnapshot,
-              clientGpsStatus: clientGpsStatus,
-              onTap: () => showDeliveryStageDialog(
-                context,
-                tracking: tracking,
-                stage: trackingStage,
-              ),
-            ),
-            const SizedBox(height: 18),
-          ],
-          InkWell(
-            borderRadius: BorderRadius.circular(22),
-            onTap: () => context.go('/search'),
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 15),
-              decoration: BoxDecoration(
-                color: DjassaTheme.primaryWhite,
-                borderRadius: BorderRadius.circular(22),
-                border: Border.all(color: DjassaTheme.borderMedium),
-              ),
-              child: Row(
-                children: [
-                  const Icon(Icons.search_rounded),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Text(
-                      'Rechercher un article, une marque...',
-                      style: Theme.of(context).textTheme.bodyMedium,
-                    ),
-                  ),
-                  const Icon(
-                    Icons.tune_rounded,
-                    color: DjassaTheme.accentOrange,
-                  ),
-                ],
-              ),
+          _HomeHero(userName: user?.fullName),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 18, 16, 0),
+            child: Text(
+              'Bonjour ${user?.fullName ?? 'a vous'}',
+              style: Theme.of(context).textTheme.titleLarge,
             ),
           ),
-          const SizedBox(height: 18),
-          PromoCard(
-            title: 'Promos du moment',
-            subtitle:
-                'Découvrez les meilleures offres sélectionnées pour vous.',
-            buttonLabel: 'Voir les promos',
-            icon: Icons.local_offer_rounded,
-            onPressed: () => context.go('/categories'),
+          const SizedBox(height: 12),
+          activeOrderAsync.when(
+            loading: () => const SizedBox.shrink(),
+            error: (_, __) => const SizedBox.shrink(),
+            data: (order) {
+              if (order == null) return const SizedBox.shrink();
+              return Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 18),
+                child: OrderProgressTracker(
+                  key: ValueKey('${order.id}_${order.status}'),
+                  order: order,
+                  compact: true,
+                ),
+              );
+            },
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: PromoCard(
+              title: 'Promos du moment',
+              subtitle:
+                  'Decouvrez les meilleures offres selectionnees pour vous.',
+              buttonLabel: 'Voir les promos',
+              icon: Icons.local_offer_rounded,
+              onPressed: () => context.go('/categories'),
+            ),
           ),
           const SizedBox(height: 24),
-          SectionTitle(
-            title: 'Rayons populaires',
-            actionLabel: 'Tout voir',
-            onAction: () => context.go('/categories'),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: SectionTitle(
+              title: 'Categories rapides',
+              actionLabel: 'Voir tout',
+              onAction: () => context.go('/categories'),
+            ),
           ),
           const SizedBox(height: 12),
           categoriesAsync.when(
             loading: () => const SizedBox(
-              height: 154,
+              height: 126,
               child: Center(child: CircularProgressIndicator()),
             ),
             error: (e, _) => SizedBox(
-              height: 154,
+              height: 126,
               child: Center(
                 child: Text(
-                  'Impossible de charger les catégories.',
+                  'Impossible de charger les categories.',
                   style: Theme.of(context).textTheme.bodyMedium,
                 ),
               ),
             ),
             data: (categories) => categories.isEmpty
                 ? const SizedBox(
-                    height: 154,
-                    child: Center(child: Text('Aucune catégorie disponible.')),
+                    height: 126,
+                    child: Center(child: Text('Aucune categorie disponible.')),
                   )
                 : SizedBox(
-                    height: 154,
+                    height: 126,
                     child: ListView.separated(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
                       scrollDirection: Axis.horizontal,
                       itemCount: categories.length,
                       separatorBuilder: (_, __) => const SizedBox(width: 12),
@@ -211,10 +135,13 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   ),
           ),
           const SizedBox(height: 24),
-          SectionTitle(
-            title: 'Meilleures ventes',
-            actionLabel: 'Recherche',
-            onAction: () => context.go('/search'),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: SectionTitle(
+              title: 'Tendances',
+              actionLabel: 'Voir tout',
+              onAction: () => context.go('/search'),
+            ),
           ),
           const SizedBox(height: 12),
           productsAsync.when(
@@ -227,24 +154,154 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             ),
             data: (products) => products.isEmpty
                 ? const Center(child: Text('Aucun produit disponible.'))
-                : GridView.builder(
-                    shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
-                    itemCount: products.length,
-                    gridDelegate:
-                        const SliverGridDelegateWithFixedCrossAxisCount(
-                      crossAxisCount: 2,
-                      mainAxisSpacing: 14,
-                      crossAxisSpacing: 14,
-                      childAspectRatio: .67,
+                : Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: GridView.builder(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      itemCount: products.length,
+                      gridDelegate:
+                          const SliverGridDelegateWithFixedCrossAxisCount(
+                        crossAxisCount: 2,
+                        mainAxisSpacing: 14,
+                        crossAxisSpacing: 14,
+                        childAspectRatio: .67,
+                      ),
+                      itemBuilder: (context, index) {
+                        return ProductCard(product: products[index]);
+                      },
                     ),
-                    itemBuilder: (context, index) {
-                      return ProductCard(product: products[index]);
-                    },
                   ),
           ),
           const SizedBox(height: 88),
         ],
+      ),
+    );
+  }
+}
+
+class _HomeHero extends StatelessWidget {
+  const _HomeHero({this.userName});
+
+  final String? userName;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(16, 6, 16, 22),
+      decoration: const BoxDecoration(
+        color: DjassaTheme.primaryBlack,
+        borderRadius: BorderRadius.vertical(bottom: Radius.circular(22)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(
+                Icons.location_on_outlined,
+                color: DjassaTheme.primaryWhite,
+                size: 20,
+              ),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  'Abidjan',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        color: DjassaTheme.primaryWhite,
+                        fontWeight: FontWeight.w800,
+                      ),
+                ),
+              ),
+              InkWell(
+                borderRadius: BorderRadius.circular(18),
+                onTap: () => context.go('/profile'),
+                child: CircleAvatar(
+                  radius: 20,
+                  backgroundColor:
+                      DjassaTheme.primaryWhite.withValues(alpha: .12),
+                  child: const Icon(
+                    Icons.person_rounded,
+                    color: DjassaTheme.primaryWhite,
+                    size: 20,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 18),
+          InkWell(
+            borderRadius: BorderRadius.circular(14),
+            onTap: () => context.go('/search'),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 15),
+              decoration: BoxDecoration(
+                color: DjassaTheme.primaryWhite,
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.search_rounded),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      'Rechercher un produit...',
+                      style: Theme.of(context).textTheme.bodyMedium,
+                    ),
+                  ),
+                  const Icon(
+                    Icons.tune_rounded,
+                    color: DjassaTheme.accentOrange,
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 14),
+          SizedBox(
+            height: 40,
+            child: ListView(
+              scrollDirection: Axis.horizontal,
+              children: const [
+                _HeaderChip(label: 'Vehicules', selected: true),
+                _HeaderChip(label: 'Electronique'),
+                _HeaderChip(label: 'Mode'),
+                _HeaderChip(label: 'Maison'),
+                _HeaderChip(label: 'Telephones'),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _HeaderChip extends StatelessWidget {
+  const _HeaderChip({required this.label, this.selected = false});
+
+  final String label;
+  final bool selected;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(right: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        color: selected
+            ? DjassaTheme.accentOrange
+            : DjassaTheme.primaryWhite.withValues(alpha: .12),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        label,
+        style: const TextStyle(
+          color: DjassaTheme.primaryWhite,
+          fontWeight: FontWeight.w800,
+          fontSize: 12,
+        ),
       ),
     );
   }

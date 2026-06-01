@@ -2,21 +2,13 @@ import 'package:djassa/presentation/screens/shop/shop_data.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/theme/djassa_theme.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/core_providers.dart';
 import '../../widgets/shop/delivery_tracking_widgets.dart';
+import '../../widgets/shop/payment_ui.dart';
 import '../../widgets/shop/shop_widgets.dart';
-
-/// Opérateurs Mobile Money disponibles
-const List<Map<String, String>> _providers = [
-  {'label': 'Wave', 'value': 'wave', 'icon': '🌊'},
-  {'label': 'Orange Money', 'value': 'orange_money', 'icon': '🟠'},
-  {'label': 'MTN Money', 'value': 'mtn_money', 'icon': '🟡'},
-  {'label': 'Moov Money', 'value': 'moov_money', 'icon': '🔵'},
-];
 
 class CheckoutScreen extends ConsumerStatefulWidget {
   const CheckoutScreen({super.key});
@@ -51,147 +43,57 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     _selectedCommune = savedAddress?.commune;
   }
 
-  Future<void> _showTrackingDialog(
-    DeliveryTracking tracking,
-    DeliveryTrackingStage stage,
-  ) {
-    if (!mounted) return Future<void>.value();
-    return showDeliveryStageDialog(
-      context,
-      tracking: tracking,
-      stage: stage,
-    );
+  void _showErrorSnackBar(String friendlyMessage) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              const Icon(Icons.error_outline_rounded,
+                  color: Colors.white, size: 20),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  friendlyMessage,
+                  style: const TextStyle(color: Colors.white),
+                ),
+              ),
+            ],
+          ),
+          backgroundColor: Colors.red.shade700,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(14),
+          ),
+          duration: const Duration(seconds: 6),
+          action: SnackBarAction(
+            label: 'Réessayer',
+            textColor: Colors.white,
+            onPressed: _confirmOrder,
+          ),
+        ),
+      );
   }
 
-  /// Dialog pour choisir l'opérateur et saisir le numéro Mobile Money
-  Future<Map<String, String>?> _askPaymentInfo(String? prefilled) async {
-    final controller = TextEditingController(text: prefilled ?? '');
-    String selectedProvider = 'wave';
+  String _friendlyMessage(Object e) {
+    final raw = e is Exception
+        ? e.toString().replaceFirst('Exception: ', '')
+        : 'Erreur inattendue. Veuillez réessayer.';
 
-    return showDialog<Map<String, String>>(
-      context: context,
-      barrierDismissible: false,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setStateDialog) => AlertDialog(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(24),
-          ),
-          title: Row(
-            children: [
-              CircleAvatar(
-                backgroundColor:
-                    DjassaTheme.accentOrange.withValues(alpha: .12),
-                child: const Icon(
-                  Icons.phone_rounded,
-                  color: DjassaTheme.accentOrange,
-                ),
-              ),
-              const SizedBox(width: 12),
-              const Expanded(child: Text('Paiement Mobile Money')),
-            ],
-          ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'Choisissez votre opérateur et entrez le numéro à débiter.',
-                style: TextStyle(fontSize: 13),
-              ),
-              const SizedBox(height: 16),
+    final isTechnical = raw.contains('FunctionException') ||
+        raw.contains('PostgrestException') ||
+        raw.contains('status:') ||
+        raw.contains('reasonPhrase') ||
+        raw.contains('SocketException') ||
+        raw.contains('HttpException');
 
-              // Sélection de l'opérateur
-              const Text(
-                'Opérateur',
-                style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
-              ),
-              const SizedBox(height: 8),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: _providers.map((p) {
-                  final isSelected = selectedProvider == p['value'];
-                  return GestureDetector(
-                    onTap: () =>
-                        setStateDialog(() => selectedProvider = p['value']!),
-                    child: AnimatedContainer(
-                      duration: const Duration(milliseconds: 150),
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 8,
-                      ),
-                      decoration: BoxDecoration(
-                        color: isSelected
-                            ? DjassaTheme.accentOrange.withValues(alpha: .12)
-                            : Colors.grey.shade100,
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(
-                          color: isSelected
-                              ? DjassaTheme.accentOrange
-                              : Colors.grey.shade300,
-                          width: isSelected ? 2 : 1,
-                        ),
-                      ),
-                      child: Text(
-                        '${p['icon']}  ${p['label']}',
-                        style: TextStyle(
-                          fontSize: 13,
-                          fontWeight:
-                              isSelected ? FontWeight.w700 : FontWeight.normal,
-                          color: isSelected
-                              ? DjassaTheme.accentOrange
-                              : Colors.black87,
-                        ),
-                      ),
-                    ),
-                  );
-                }).toList(),
-              ),
-
-              const SizedBox(height: 16),
-
-              // Numéro de téléphone
-              TextField(
-                controller: controller,
-                keyboardType: TextInputType.phone,
-                autofocus: true,
-                decoration: InputDecoration(
-                  labelText: 'Numéro de téléphone',
-                  prefixIcon: const Icon(Icons.phone_outlined),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                  hintText: 'Ex: 07 00 00 00 00',
-                ),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(ctx).pop(null),
-              child: const Text('Annuler'),
-            ),
-            FilledButton(
-              style: FilledButton.styleFrom(
-                backgroundColor: DjassaTheme.accentOrange,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-              ),
-              onPressed: () {
-                final phone = controller.text.trim();
-                if (phone.length < 8) return;
-                Navigator.of(ctx).pop({
-                  'phone': phone,
-                  'provider': selectedProvider,
-                });
-              },
-              child: const Text('Confirmer'),
-            ),
-          ],
-        ),
-      ),
-    );
+    if (isTechnical) {
+      return 'Échec du paiement. Veuillez réessayer ou choisir '
+          'un autre moyen de paiement.';
+    }
+    return raw;
   }
 
   Future<void> _confirmOrder() async {
@@ -213,53 +115,37 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       return;
     }
 
-    // 1. Demander opérateur + numéro Mobile Money
-    final paymentInfo = await _askPaymentInfo(user.phone);
-    if (paymentInfo == null || !mounted) return;
-
-    final phone = paymentInfo['phone']!;
-    final provider = paymentInfo['provider']!;
-
     setState(() => _isProcessing = true);
+
     try {
+      // 1. Sauvegarde adresse
       await ref
           .read(savedDeliveryAddressProvider.notifier)
           .save(_selectedCity!, _selectedCommune!);
+
+      // 2. Position client pour le tracking
       final trackingService = ref.read(deliveryTrackingServiceProvider);
       final clientPosition = await trackingService.getCurrentClientPosition();
 
-      // 2. Créer la commande
+      // 3. Crée la commande Djassa (brouillon)
       final order = await ref.read(shopServiceProvider).createOrderDraft(
             lines: lines,
             customerName: user.fullName.trim().isEmpty
                 ? 'Client Djassa'
                 : user.fullName.trim(),
-            customerPhone: phone,
+            customerPhone: user.phone,
             deliveryAddress: _deliveryAddress,
           );
 
       final orderId = order['id'] as String;
-      final total = order['total'] as int;
+      final total = (order['total'] as num?)?.toInt() ?? 0;
       final shortId = orderId.length > 6 ? orderId.substring(0, 6) : orderId;
-      final orderNumber = order['order_number']?.toString() ?? 'DJ-$shortId';
+      final orderNumber =
+          order['order_number']?.toString() ?? 'DJ-$shortId';
 
-      // 3. Créer le paiement GeniusPay
-      final payment = await ref.read(shopServiceProvider).createPayment(
-            orderId: orderId,
-            amount: total,
-            provider: provider, // ✅ paramètre requis
-            customerPhone: phone,
-            customerName:
-                user.fullName.trim().isEmpty ? null : user.fullName.trim(),
-          );
-
-      final checkoutUrl = payment['checkout_url'] as String?;
-      if (checkoutUrl == null || checkoutUrl.isEmpty) {
-        throw Exception('URL de paiement introuvable.');
-      }
-
+      // 4. Démarre le tracking livraison
       final trackingNotifier = ref.read(deliveryTrackingProvider.notifier);
-      final tracking = await trackingNotifier.start(
+      await trackingNotifier.start(
         orderId: orderId,
         orderNumber: orderNumber,
         address: _deliveryAddress,
@@ -274,41 +160,66 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
         );
       }
 
-      // 4. Vider le panier, rafraîchir les commandes et annoncer les étapes
       ref.invalidate(ordersProvider);
       ref.read(cartProvider.notifier).clear();
 
-      await trackingNotifier.markStageAnnounced(
-        orderId,
-        DeliveryTrackingStage.created,
-      );
-      await _showTrackingDialog(tracking, DeliveryTrackingStage.created);
+      if (!mounted) return;
 
-      await trackingNotifier.markStageAnnounced(
-        orderId,
-        DeliveryTrackingStage.scheduled,
-      );
-      await _showTrackingDialog(tracking, DeliveryTrackingStage.scheduled);
+      // 5. Crée la transaction GeniusPay via la Supabase Edge Function
+      final payment = await ref.read(shopServiceProvider).createPayment(
+            orderId: orderId,
+            amount: total,
+            provider: 'checkout',
+            customerPhone: user.phone,
+            customerName: user.fullName.trim().isEmpty
+                ? 'Client Djassa'
+                : user.fullName.trim(),
+          );
 
-      // 5. Ouvrir l'URL de paiement
-      final uri = Uri.parse(checkoutUrl);
-      if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
-        throw Exception('Impossible d\'ouvrir la page de paiement.');
-      }
+      final checkoutUrl = payment['checkout_url'] as String;
+      final reference = payment['reference'] as String? ?? orderId;
 
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content:
-              Text('Page de paiement ouverte. Revenez après confirmation.'),
-        ),
+
+      // 6. Ouvre la WebView GeniusPay
+      await openOrderPayment(
+        context,
+        checkoutUrl: checkoutUrl,
+        reference: reference,
+        onPaymentSuccess: () {
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: const Row(
+                children: [
+                  Icon(Icons.check_circle_rounded,
+                      color: Colors.white, size: 20),
+                  SizedBox(width: 10),
+                  Text(
+                    'Paiement réussi !',
+                    style: TextStyle(color: Colors.white),
+                  ),
+                ],
+              ),
+              backgroundColor: Colors.green.shade700,
+              behavior: SnackBarBehavior.floating,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(14),
+              ),
+            ),
+          );
+          context.go('/orders');
+        },
+        onPaymentFailed: () {
+          if (!mounted) return;
+          _showErrorSnackBar(
+            'Paiement échoué ou annulé. '
+            'Vous pouvez réessayer depuis vos commandes.',
+          );
+        },
       );
-      context.go('/home');
     } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Erreur : $e')),
-      );
+      _showErrorSnackBar(_friendlyMessage(e));
     } finally {
       if (mounted) setState(() => _isProcessing = false);
     }
@@ -334,7 +245,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
           const SectionTitle(title: 'Finaliser la commande'),
           const SizedBox(height: 12),
 
-          // Bloc adresse avec dropdowns
+          // ── Bloc adresse ──────────────────────────────────────────────
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
@@ -441,7 +352,8 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                   const SizedBox(height: 8),
                   Text(
                     'Veuillez sélectionner une ville et une commune',
-                    style: TextStyle(color: Colors.red.shade600, fontSize: 12),
+                    style:
+                        TextStyle(color: Colors.red.shade600, fontSize: 12),
                   ),
                 ],
 
@@ -497,6 +409,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
           const DeliveryFlowInfoCard(),
           const SizedBox(height: 12),
 
+          // ── Bouton payer ──────────────────────────────────────────────
           Container(
             padding: const EdgeInsets.all(18),
             decoration: BoxDecoration(
@@ -512,17 +425,18 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                       Text(
                         'Total à payer',
                         style: TextStyle(
-                          color:
-                              DjassaTheme.primaryWhite.withValues(alpha: .72),
+                          color: DjassaTheme.primaryWhite
+                              .withValues(alpha: .72),
                         ),
                       ),
                       const SizedBox(height: 5),
                       Text(
                         formatPrice(total),
-                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                              color: DjassaTheme.primaryWhite,
-                              fontSize: 22,
-                            ),
+                        style:
+                            Theme.of(context).textTheme.titleLarge?.copyWith(
+                                  color: DjassaTheme.primaryWhite,
+                                  fontSize: 22,
+                                ),
                       ),
                     ],
                   ),

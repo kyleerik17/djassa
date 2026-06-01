@@ -25,14 +25,57 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final products = ref.watch(productsProvider).maybeWhen(
-          data: (value) => value,
-          orElse: () => shopProducts,
-        );
-    final product = products.firstWhere(
-      (item) => item.id == widget.productId,
-      orElse: () => productById(widget.productId),
-    );
+    final productsAsync = ref.watch(productsProvider);
+
+    if (productsAsync.isLoading) {
+      return const ShopScaffold(
+        currentIndex: 1,
+        title: 'Détail article',
+        showBackButton: true,
+        child: Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    if (productsAsync.hasError) {
+      return ShopScaffold(
+        currentIndex: 1,
+        title: 'Détail article',
+        showBackButton: true,
+        child: EmptyStateCard(
+          icon: Icons.cloud_off_rounded,
+          title: 'Article indisponible',
+          message: 'Impossible de charger les articles du serveur.',
+          buttonLabel: 'Réessayer',
+          onPressed: () => ref.invalidate(productsProvider),
+        ),
+      );
+    }
+
+    final products = productsAsync.valueOrNull ?? [];
+    ShopProduct? matchedProduct;
+    for (final item in products) {
+      if (item.id == widget.productId) {
+        matchedProduct = item;
+        break;
+      }
+    }
+
+    if (matchedProduct == null) {
+      return ShopScaffold(
+        currentIndex: 1,
+        title: 'Détail article',
+        showBackButton: true,
+        child: EmptyStateCard(
+          icon: Icons.inventory_2_outlined,
+          title: 'Article introuvable',
+          message: 'Cet article n’est plus disponible dans le catalogue.',
+          buttonLabel: 'Retour recherche',
+          onPressed: () => context.go('/search'),
+        ),
+      );
+    }
+
+    final product = matchedProduct;
     final maxQuantity = product.stock <= 0 ? 99 : product.stock;
 
     return ShopScaffold(
