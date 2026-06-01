@@ -94,6 +94,14 @@ class OrdersScreen extends ConsumerWidget {
                                   ),
                         ),
                         const Spacer(),
+                        if (order.orderUuid.isNotEmpty)
+                          TextButton.icon(
+                            onPressed: () => context.go(
+                              '/order-chat/${order.orderUuid}?number=${Uri.encodeComponent(order.id)}',
+                            ),
+                            icon: const Icon(Icons.chat_bubble_outline_rounded),
+                            label: const Text('Discuter'),
+                          ),
                         if (!pending)
                           TextButton.icon(
                             onPressed: () => context.go('/support'),

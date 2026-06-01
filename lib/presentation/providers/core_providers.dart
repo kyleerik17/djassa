@@ -13,6 +13,7 @@ import '../../data/services/courier_order_service.dart';
 import '../../data/services/courier_profile_service.dart';
 import '../../data/services/delivery_tracking_service.dart';
 import '../../data/services/client_order_tracking_service.dart';
+import '../../data/services/order_chat_service.dart';
 import '../../data/services/structure_service.dart';
 import '../../core/services/geniuspay_service.dart';
 import '../../core/services/supabase_service.dart';
@@ -421,6 +422,10 @@ final geniusPayServiceProvider = Provider<GeniusPayService>((ref) {
 final clientOrderTrackingServiceProvider =
     Provider<ClientOrderTrackingService>((ref) {
   return ClientOrderTrackingService();
+});
+
+final orderChatServiceProvider = Provider<OrderChatService>((ref) {
+  return OrderChatService();
 });
 
 /// Commande en cours du client (temps réel Supabase).

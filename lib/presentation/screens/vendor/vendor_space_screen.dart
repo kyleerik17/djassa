@@ -38,6 +38,7 @@ class _VendorSpaceScreenState extends ConsumerState<VendorSpaceScreen> {
   bool _initialized = false;
   bool _saving = false;
   bool _creatingProduct = false;
+  String? _deletingProductId;
 
   // ✅ Contrôle l'affichage du formulaire de configuration
   bool _formVisible = false;
@@ -169,9 +170,7 @@ class _VendorSpaceScreenState extends ConsumerState<VendorSpaceScreen> {
             structureId: structure.id,
             input: input,
           );
-      ref.invalidate(vendorProductsProvider(structure.id));
-      ref.invalidate(productsProvider);
-      ref.invalidate(categoriesProvider);
+      _refreshProducts(structure.id);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -186,6 +185,112 @@ class _VendorSpaceScreenState extends ConsumerState<VendorSpaceScreen> {
       );
     } finally {
       if (mounted) setState(() => _creatingProduct = false);
+    }
+  }
+
+  void _refreshProducts(String structureId) {
+    ref.invalidate(vendorProductsProvider(structureId));
+    ref.invalidate(productsProvider);
+    ref.invalidate(categoriesProvider);
+  }
+
+  Future<void> _openEditProduct(
+    Structure structure,
+    ShopProduct product,
+  ) async {
+    List<ShopCategory> categories;
+    try {
+      categories = await ref.read(categoriesProvider.future);
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Impossible de charger les categories: $error')),
+      );
+      return;
+    }
+
+    if (!mounted) return;
+    final input = await showModalBottomSheet<VendorProductInput>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _VendorProductFormSheet(
+        categories: categories,
+        product: product,
+      ),
+    );
+    if (input == null) return;
+
+    try {
+      await ref.read(shopServiceProvider).updateVendorProduct(
+            structureId: structure.id,
+            productId: product.id,
+            input: input,
+          );
+      _refreshProducts(structure.id);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          backgroundColor: Colors.green,
+          content: Text('Article modifie.'),
+        ),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Modification impossible: $error')),
+      );
+    }
+  }
+
+  Future<void> _confirmDeleteProduct(
+    Structure structure,
+    ShopProduct product,
+  ) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Supprimer cet article ?'),
+        content: Text(
+          'L\'article "${product.name}" sera retire de votre boutique.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Annuler'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('Supprimer'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+    setState(() => _deletingProductId = product.id);
+    try {
+      await ref.read(shopServiceProvider).deleteVendorProduct(
+            structureId: structure.id,
+            productId: product.id,
+          );
+      _refreshProducts(structure.id);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          backgroundColor: Colors.green,
+          content: Text('Article supprime.'),
+        ),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Suppression impossible: $error')),
+      );
+    } finally {
+      if (mounted) setState(() => _deletingProductId = null);
     }
   }
 
@@ -291,6 +396,11 @@ class _VendorSpaceScreenState extends ConsumerState<VendorSpaceScreen> {
                       shopComplete: complete,
                       isActive: _isActive,
                     ),
+                    const SizedBox(height: 12),
+                    _VendorShopOverviewCard(
+                      structure: structure,
+                      onConfigure: () => setState(() => _formVisible = true),
+                    ),
                     if (!complete) ...[
                       const SizedBox(height: 12),
                       _IncompleteShopBanner(),
@@ -357,6 +467,12 @@ class _VendorSpaceScreenState extends ConsumerState<VendorSpaceScreen> {
                 ],
               ),
             ],
+          ),
+          const SizedBox(height: 16),
+          productsAsync.when(
+            loading: () => const _VendorProductsMetricsSkeleton(),
+            error: (_, __) => const SizedBox.shrink(),
+            data: (products) => _VendorProductsMetrics(products: products),
           ),
           const SizedBox(height: 16),
 
@@ -461,13 +577,24 @@ class _VendorSpaceScreenState extends ConsumerState<VendorSpaceScreen> {
                         (entry) => _ProductsByCategoryGroup(
                           categoryName: entry.key,
                           products: entry.value,
+                          deletingProductId: _deletingProductId,
+                          onEdit: (product) =>
+                              _openEditProduct(structure, product),
+                          onDelete: (product) =>
+                              _confirmDeleteProduct(structure, product),
                         ),
                       )
                       .toList(),
                 );
               } else {
                 // Affichage simple si une catégorie est filtrée
-                return _ProductsList(products: filtered);
+                return _ProductsList(
+                  products: filtered,
+                  deletingProductId: _deletingProductId,
+                  onEdit: (product) => _openEditProduct(structure, product),
+                  onDelete: (product) =>
+                      _confirmDeleteProduct(structure, product),
+                );
               }
             },
           ),
@@ -663,9 +790,13 @@ class _VendorSpaceScreenState extends ConsumerState<VendorSpaceScreen> {
 }
 
 class _VendorProductFormSheet extends StatefulWidget {
-  const _VendorProductFormSheet({required this.categories});
+  const _VendorProductFormSheet({
+    required this.categories,
+    this.product,
+  });
 
   final List<ShopCategory> categories;
+  final ShopProduct? product;
 
   @override
   State<_VendorProductFormSheet> createState() =>
@@ -688,7 +819,26 @@ class _VendorProductFormSheetState extends State<_VendorProductFormSheet> {
   @override
   void initState() {
     super.initState();
-    _categoryId = widget.categories.isEmpty ? null : widget.categories.first.id;
+    final product = widget.product;
+    final productCategoryExists = widget.categories.any(
+      (category) => category.id == product?.categoryId,
+    );
+    _categoryId = productCategoryExists
+        ? product!.categoryId
+        : widget.categories.isEmpty
+            ? null
+            : widget.categories.first.id;
+    if (product != null) {
+      _nameController.text = product.name;
+      _descriptionController.text = product.description;
+      _compatibilityController.text = product.compatibility;
+      _priceController.text = '${product.price}';
+      _oldPriceController.text =
+          product.oldPrice <= 0 ? '' : '${product.oldPrice}';
+      _stockController.text = '${product.stock}';
+      _badgeController.text = product.badge;
+      _isActive = product.isActive;
+    }
   }
 
   @override
@@ -706,6 +856,7 @@ class _VendorProductFormSheetState extends State<_VendorProductFormSheet> {
   @override
   Widget build(BuildContext context) {
     final bottomInset = MediaQuery.of(context).viewInsets.bottom;
+    final isEditing = widget.product != null;
 
     return Padding(
       padding: EdgeInsets.only(bottom: bottomInset),
@@ -740,7 +891,7 @@ class _VendorProductFormSheetState extends State<_VendorProductFormSheet> {
                   children: [
                     Expanded(
                       child: Text(
-                        'Nouvel article',
+                        isEditing ? 'Modifier l\'article' : 'Nouvel article',
                         style: Theme.of(context)
                             .textTheme
                             .displaySmall
@@ -872,8 +1023,14 @@ class _VendorProductFormSheetState extends State<_VendorProductFormSheet> {
                       ),
                     ),
                     onPressed: _submit,
-                    icon: const Icon(Icons.add_rounded),
-                    label: const Text('Creer l\'article'),
+                    icon: Icon(
+                      isEditing ? Icons.save_rounded : Icons.add_rounded,
+                    ),
+                    label: Text(
+                      isEditing
+                          ? 'Enregistrer les changements'
+                          : 'Creer l\'article',
+                    ),
                   ),
                 ),
               ],
@@ -975,14 +1132,362 @@ class _VendorNumberField extends StatelessWidget {
 // ============================================================================
 
 /// ✅ Groupe d'articles par catégorie
+class _VendorShopOverviewCard extends StatelessWidget {
+  const _VendorShopOverviewCard({
+    required this.structure,
+    required this.onConfigure,
+  });
+
+  final Structure structure;
+  final VoidCallback onConfigure;
+
+  @override
+  Widget build(BuildContext context) {
+    final hasShop = structure.id.isNotEmpty;
+    final title = structure.name.trim().isEmpty
+        ? 'Boutique non configuree'
+        : structure.name.trim();
+    final description = structure.description.trim().isEmpty
+        ? 'Ajoutez une description pour aider les clients a vous identifier.'
+        : structure.description.trim();
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: DjassaTheme.primaryWhite,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: DjassaTheme.borderMedium),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 46,
+                height: 46,
+                decoration: BoxDecoration(
+                  color: DjassaTheme.accentOrange.withValues(alpha: .12),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: const Icon(
+                  Icons.storefront_rounded,
+                  color: DjassaTheme.accentOrange,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: Theme.of(context)
+                          .textTheme
+                          .titleMedium
+                          ?.copyWith(fontWeight: FontWeight.w900),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      description,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: DjassaTheme.textSecondary,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              IconButton.filledTonal(
+                tooltip: 'Configurer',
+                onPressed: onConfigure,
+                icon: const Icon(Icons.tune_rounded),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              _InfoPill(
+                icon: hasShop ? Icons.check_circle : Icons.info_outline,
+                label: hasShop ? 'Boutique creee' : 'A configurer',
+              ),
+              _InfoPill(
+                icon: structure.isActive
+                    ? Icons.visibility_rounded
+                    : Icons.visibility_off_rounded,
+                label: structure.isActive ? 'Visible clients' : 'Masquee',
+              ),
+              _InfoPill(
+                icon: Icons.schedule_rounded,
+                label: '${structure.openingHour}-${structure.closingHour}',
+              ),
+              if (structure.deliveryFee > 0)
+                _InfoPill(
+                  icon: Icons.local_shipping_outlined,
+                  label: formatPrice(structure.deliveryFee),
+                ),
+              if (structure.minimumOrder > 0)
+                _InfoPill(
+                  icon: Icons.shopping_bag_outlined,
+                  label: 'Min ${formatPrice(structure.minimumOrder)}',
+                ),
+              if (structure.address.trim().isNotEmpty)
+                _InfoPill(
+                  icon: Icons.location_on_outlined,
+                  label: structure.address.trim(),
+                ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _VendorProductsMetrics extends StatelessWidget {
+  const _VendorProductsMetrics({required this.products});
+
+  final List<ShopProduct> products;
+
+  @override
+  Widget build(BuildContext context) {
+    final activeCount = products.where((product) => product.isActive).length;
+    final outOfStockCount =
+        products.where((product) => product.stock <= 0).length;
+    final totalStock = products.fold<int>(
+      0,
+      (sum, product) => sum + product.stock.clamp(0, 999999),
+    );
+    final stockValue = products.fold<int>(
+      0,
+      (sum, product) => sum + (product.price * product.stock.clamp(0, 999999)),
+    );
+
+    return GridView.count(
+      crossAxisCount: 2,
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      crossAxisSpacing: 10,
+      mainAxisSpacing: 10,
+      childAspectRatio: 2.45,
+      children: [
+        _MetricTile(
+          label: 'Articles',
+          value: '${products.length}',
+          icon: Icons.inventory_2_outlined,
+        ),
+        _MetricTile(
+          label: 'Publies',
+          value: '$activeCount',
+          icon: Icons.visibility_rounded,
+        ),
+        _MetricTile(
+          label: 'Stock total',
+          value: '$totalStock',
+          icon: Icons.warehouse_outlined,
+        ),
+        _MetricTile(
+          label: outOfStockCount == 0 ? 'Valeur stock' : 'Ruptures',
+          value: outOfStockCount == 0
+              ? formatPrice(stockValue)
+              : '$outOfStockCount',
+          icon: outOfStockCount == 0
+              ? Icons.payments_outlined
+              : Icons.warning_amber_rounded,
+        ),
+      ],
+    );
+  }
+}
+
+class _VendorProductsMetricsSkeleton extends StatelessWidget {
+  const _VendorProductsMetricsSkeleton();
+
+  @override
+  Widget build(BuildContext context) {
+    return GridView.count(
+      crossAxisCount: 2,
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      crossAxisSpacing: 10,
+      mainAxisSpacing: 10,
+      childAspectRatio: 2.45,
+      children: const [
+        _MetricTile(
+          label: 'Articles',
+          value: '...',
+          icon: Icons.inventory_2_outlined,
+        ),
+        _MetricTile(
+          label: 'Publies',
+          value: '...',
+          icon: Icons.visibility_rounded,
+        ),
+        _MetricTile(
+          label: 'Stock total',
+          value: '...',
+          icon: Icons.warehouse_outlined,
+        ),
+        _MetricTile(
+          label: 'Valeur stock',
+          value: '...',
+          icon: Icons.payments_outlined,
+        ),
+      ],
+    );
+  }
+}
+
+class _MetricTile extends StatelessWidget {
+  const _MetricTile({
+    required this.label,
+    required this.value,
+    required this.icon,
+  });
+
+  final String label;
+  final String value;
+  final IconData icon;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: DjassaTheme.backgroundSecondary,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: DjassaTheme.borderLight),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, color: DjassaTheme.accentOrange, size: 22),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  value,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w900,
+                    fontSize: 15,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: DjassaTheme.textSecondary,
+                    fontSize: 11,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _InfoPill extends StatelessWidget {
+  const _InfoPill({
+    required this.icon,
+    required this.label,
+  });
+
+  final IconData icon;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      constraints: const BoxConstraints(maxWidth: 220),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+      decoration: BoxDecoration(
+        color: DjassaTheme.backgroundSecondary,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 15, color: DjassaTheme.accentOrange),
+          const SizedBox(width: 6),
+          Flexible(
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                color: DjassaTheme.textSecondary,
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ProductMiniPill extends StatelessWidget {
+  const _ProductMiniPill({
+    required this.label,
+    required this.color,
+  });
+
+  final String label;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: .12),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        label,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: TextStyle(
+          color: color,
+          fontSize: 10,
+          fontWeight: FontWeight.w800,
+        ),
+      ),
+    );
+  }
+}
+
 class _ProductsByCategoryGroup extends StatelessWidget {
   const _ProductsByCategoryGroup({
     required this.categoryName,
     required this.products,
+    required this.onEdit,
+    required this.onDelete,
+    this.deletingProductId,
   });
 
   final String categoryName;
   final List<ShopProduct> products;
+  final ValueChanged<ShopProduct> onEdit;
+  final ValueChanged<ShopProduct> onDelete;
+  final String? deletingProductId;
 
   @override
   Widget build(BuildContext context) {
@@ -1011,7 +1516,7 @@ class _ProductsByCategoryGroup extends StatelessWidget {
               const Spacer(),
               Text(
                 '${products.length} article${products.length > 1 ? 's' : ''}',
-                style: TextStyle(
+                style: const TextStyle(
                   color: DjassaTheme.textSecondary,
                   fontSize: 12,
                 ),
@@ -1021,7 +1526,12 @@ class _ProductsByCategoryGroup extends StatelessWidget {
         ),
         ...products.map((product) => Padding(
               padding: const EdgeInsets.only(bottom: 10),
-              child: _VendorProductCard(product: product),
+              child: _VendorProductCard(
+                product: product,
+                isDeleting: deletingProductId == product.id,
+                onEdit: () => onEdit(product),
+                onDelete: () => onDelete(product),
+              ),
             )),
         const SizedBox(height: 8),
       ],
@@ -1031,9 +1541,17 @@ class _ProductsByCategoryGroup extends StatelessWidget {
 
 /// ✅ Liste simple d'articles (catégorie filtrée)
 class _ProductsList extends StatelessWidget {
-  const _ProductsList({required this.products});
+  const _ProductsList({
+    required this.products,
+    required this.onEdit,
+    required this.onDelete,
+    this.deletingProductId,
+  });
 
   final List<ShopProduct> products;
+  final ValueChanged<ShopProduct> onEdit;
+  final ValueChanged<ShopProduct> onDelete;
+  final String? deletingProductId;
 
   @override
   Widget build(BuildContext context) {
@@ -1041,7 +1559,12 @@ class _ProductsList extends StatelessWidget {
       children: products
           .map((product) => Padding(
                 padding: const EdgeInsets.only(bottom: 10),
-                child: _VendorProductCard(product: product),
+                child: _VendorProductCard(
+                  product: product,
+                  isDeleting: deletingProductId == product.id,
+                  onEdit: () => onEdit(product),
+                  onDelete: () => onDelete(product),
+                ),
               ))
           .toList(),
     );
@@ -1050,9 +1573,17 @@ class _ProductsList extends StatelessWidget {
 
 /// ✅ Carte d'article pour vendeur
 class _VendorProductCard extends StatelessWidget {
-  const _VendorProductCard({required this.product});
+  const _VendorProductCard({
+    required this.product,
+    required this.onEdit,
+    required this.onDelete,
+    this.isDeleting = false,
+  });
 
   final ShopProduct product;
+  final VoidCallback onEdit;
+  final VoidCallback onDelete;
+  final bool isDeleting;
 
   @override
   Widget build(BuildContext context) {
@@ -1064,6 +1595,7 @@ class _VendorProductCard extends StatelessWidget {
         border: Border.all(color: DjassaTheme.borderLight),
       ),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // Icone produit
           Container(
@@ -1084,6 +1616,7 @@ class _VendorProductCard extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Expanded(
                       child: Text(
@@ -1096,36 +1629,100 @@ class _VendorProductCard extends StatelessWidget {
                         overflow: TextOverflow.ellipsis,
                       ),
                     ),
-                    if (product.badge.isNotEmpty && product.badge != 'Top')
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 8, vertical: 4),
-                        decoration: BoxDecoration(
-                          color:
-                              DjassaTheme.accentOrange.withValues(alpha: .15),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Text(
-                          product.badge,
-                          style: const TextStyle(
-                            color: DjassaTheme.accentOrange,
-                            fontSize: 10,
-                            fontWeight: FontWeight.w800,
+                    PopupMenuButton<String>(
+                      tooltip: 'Actions article',
+                      onSelected: (value) {
+                        if (value == 'edit') onEdit();
+                        if (value == 'delete') onDelete();
+                      },
+                      itemBuilder: (context) => [
+                        const PopupMenuItem(
+                          value: 'edit',
+                          child: Row(
+                            children: [
+                              Icon(Icons.edit_outlined, size: 18),
+                              SizedBox(width: 8),
+                              Text('Modifier'),
+                            ],
                           ),
                         ),
-                      ),
+                        const PopupMenuItem(
+                          value: 'delete',
+                          child: Row(
+                            children: [
+                              Icon(
+                                Icons.delete_outline_rounded,
+                                size: 18,
+                                color: Colors.red,
+                              ),
+                              SizedBox(width: 8),
+                              Text('Supprimer'),
+                            ],
+                          ),
+                        ),
+                      ],
+                      child: isDeleting
+                          ? const SizedBox(
+                              width: 34,
+                              height: 34,
+                              child: Padding(
+                                padding: EdgeInsets.all(8),
+                                child:
+                                    CircularProgressIndicator(strokeWidth: 2),
+                              ),
+                            )
+                          : const SizedBox(
+                              width: 34,
+                              height: 34,
+                              child: Icon(Icons.more_vert_rounded),
+                            ),
+                    ),
                   ],
                 ),
                 const SizedBox(height: 4),
-                Text(
-                  product.compatibility,
-                  style: TextStyle(
-                    color: DjassaTheme.textSecondary,
-                    fontSize: 12,
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
+                Wrap(
+                  spacing: 6,
+                  runSpacing: 6,
+                  children: [
+                    _ProductMiniPill(
+                      label: product.isActive ? 'Publie' : 'Brouillon',
+                      color: product.isActive ? Colors.green : Colors.orange,
+                    ),
+                    if (product.badge.isNotEmpty)
+                      _ProductMiniPill(
+                        label: product.badge,
+                        color: DjassaTheme.accentOrange,
+                      ),
+                    _ProductMiniPill(
+                      label: product.category,
+                      color: DjassaTheme.textSecondary,
+                    ),
+                  ],
                 ),
+                if (product.compatibility.trim().isNotEmpty) ...[
+                  const SizedBox(height: 6),
+                  Text(
+                    product.compatibility,
+                    style: const TextStyle(
+                      color: DjassaTheme.textSecondary,
+                      fontSize: 12,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+                if (product.description.trim().isNotEmpty) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    product.description,
+                    style: TextStyle(
+                      color: DjassaTheme.textSecondary.withValues(alpha: .82),
+                      fontSize: 12,
+                    ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
                 const SizedBox(height: 8),
                 Row(
                   children: [
@@ -1141,7 +1738,7 @@ class _VendorProductCard extends StatelessWidget {
                       const SizedBox(width: 6),
                       Text(
                         formatPrice(product.oldPrice),
-                        style: TextStyle(
+                        style: const TextStyle(
                           color: DjassaTheme.textSecondary,
                           fontSize: 12,
                           decoration: TextDecoration.lineThrough,
@@ -1199,13 +1796,13 @@ class _EmptyProductsState extends StatelessWidget {
       ),
       child: Column(
         children: [
-          Icon(Icons.inventory_2_outlined,
+          const Icon(Icons.inventory_2_outlined,
               size: 48, color: DjassaTheme.textSecondary),
           const SizedBox(height: 12),
           Text(
             message,
             textAlign: TextAlign.center,
-            style: TextStyle(color: DjassaTheme.textSecondary),
+            style: const TextStyle(color: DjassaTheme.textSecondary),
           ),
           const SizedBox(height: 16),
           if (onAdd != null)
@@ -1479,6 +2076,17 @@ class _VendorOrderCard extends StatelessWidget {
                   ),
                 ),
               ),
+          const SizedBox(height: 8),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: () => context.go(
+                '/order-chat/${order.id}?number=${Uri.encodeComponent(order.orderNumber)}',
+              ),
+              icon: const Icon(Icons.chat_bubble_outline_rounded),
+              label: const Text('Discuter avec le client'),
+            ),
+          ),
         ],
       ),
     );

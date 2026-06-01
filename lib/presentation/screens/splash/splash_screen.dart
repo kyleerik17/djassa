@@ -203,7 +203,7 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
                 child: Opacity(
                   opacity: _logoOpacity.value,
                   child: SizedBox(
-                    width: 120,
+                    width: 180,
                     height: 120,
                     child: Stack(
                       alignment: Alignment.center,
@@ -227,17 +227,20 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
                           ),
                         ),
                         Container(
-                          width: 88,
-                          height: 88,
+                          width: 164,
+                          height: 72,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 14,
+                            vertical: 10,
+                          ),
                           decoration: BoxDecoration(
-                            color: DjassaTheme.accentOrange,
-                            borderRadius: BorderRadius.circular(22),
+                            color: DjassaTheme.primaryWhite,
+                            borderRadius: BorderRadius.circular(18),
                             boxShadow: DjassaTheme.shadowMedium,
                           ),
-                          child: const Icon(
-                            Icons.directions_car_rounded,
-                            size: 48,
-                            color: DjassaTheme.primaryWhite,
+                          child: Image.asset(
+                            AppConstants.logoAsset,
+                            fit: BoxFit.contain,
                           ),
                         ),
                       ],
@@ -253,15 +256,6 @@ class _SplashScreenState extends ConsumerState<SplashScreen>
                 opacity: _textOpacity,
                 child: Column(
                   children: [
-                    Text(
-                      'DJASSA',
-                      style: Theme.of(context).textTheme.displayMedium?.copyWith(
-                            color: DjassaTheme.primaryWhite,
-                            letterSpacing: 6,
-                            fontWeight: FontWeight.w900,
-                          ),
-                    ),
-                    const SizedBox(height: 8),
                     Text(
                       'Votre marché, livré',
                       style: Theme.of(context).textTheme.bodyMedium?.copyWith(

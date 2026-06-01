@@ -26,6 +26,10 @@ class AppConstants {
   static const String courierRoute = '/courier';
   static const String vendorRoute = '/vendor';
   static const String vendorAccountRoute = '/vendor/account';
+  static const String orderChatRoute = '/order-chat/:orderId';
+
+  // Assets
+  static const String logoAsset = 'assets/icons/djassa_logo.png';
 
   // Storage Keys
   static const String tokenKey = 'auth_token';

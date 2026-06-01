@@ -15,6 +15,7 @@ import '../../presentation/screens/shop/checkout_screen.dart';
 import '../../presentation/screens/shop/edit_profile_screen.dart';
 import '../../presentation/screens/shop/favorites_screen.dart';
 import '../../presentation/screens/shop/notifications_screen.dart';
+import '../../presentation/screens/shop/order_chat_screen.dart';
 import '../../presentation/screens/shop/orders_screen.dart';
 import '../../presentation/screens/shop/payment_screen.dart';
 import '../../presentation/screens/shop/product_detail_screen.dart';
@@ -149,6 +150,17 @@ class AppRouter {
           path: AppConstants.ordersRoute,
           name: 'orders',
           child: const OrdersScreen(),
+        ),
+        GoRoute(
+          path: AppConstants.orderChatRoute,
+          name: 'order-chat',
+          pageBuilder: (context, state) => _page(
+            state,
+            OrderChatScreen(
+              orderId: state.pathParameters['orderId'] ?? '',
+              orderNumber: state.uri.queryParameters['number'],
+            ),
+          ),
         ),
         GoRoute(
           path: AppConstants.productDetailRoute,

@@ -180,6 +180,82 @@ class ShopService {
 
   // ─── Commandes ────────────────────────────────────────────────────────────
 
+  Future<ShopProduct> updateVendorProduct({
+    required String structureId,
+    required String productId,
+    required VendorProductInput input,
+  }) async {
+    final user = _client.auth.currentUser;
+    if (user == null) {
+      throw Exception('Connectez-vous avant de modifier un article.');
+    }
+
+    final cleanStructureId = structureId.trim();
+    final cleanProductId = productId.trim();
+    if (cleanStructureId.isEmpty || cleanProductId.isEmpty) {
+      throw Exception('Article introuvable.');
+    }
+
+    try {
+      final row = await _client
+          .from('products')
+          .update(input.toJson(slug: _slugify(input.name)))
+          .eq('id', cleanProductId)
+          .eq('structure_id', cleanStructureId)
+          .select('*, categories(id,name)')
+          .single();
+      return _productFromRow(row);
+    } on PostgrestException catch (e) {
+      if (_isMissingStructureIdColumn(e)) {
+        throw Exception(
+          'Colonne structure_id manquante. Executez supabase/vendor_structures.sql.',
+        );
+      }
+      if (_isPermissionError(e)) {
+        throw Exception(
+          'Droits vendeur manquants sur les articles. Executez supabase/vendor_structures.sql.',
+        );
+      }
+      rethrow;
+    }
+  }
+
+  Future<void> deleteVendorProduct({
+    required String structureId,
+    required String productId,
+  }) async {
+    final user = _client.auth.currentUser;
+    if (user == null) {
+      throw Exception('Connectez-vous avant de supprimer un article.');
+    }
+
+    final cleanStructureId = structureId.trim();
+    final cleanProductId = productId.trim();
+    if (cleanStructureId.isEmpty || cleanProductId.isEmpty) {
+      throw Exception('Article introuvable.');
+    }
+
+    try {
+      await _client
+          .from('products')
+          .delete()
+          .eq('id', cleanProductId)
+          .eq('structure_id', cleanStructureId);
+    } on PostgrestException catch (e) {
+      if (_isMissingStructureIdColumn(e)) {
+        throw Exception(
+          'Colonne structure_id manquante. Executez supabase/vendor_structures.sql.',
+        );
+      }
+      if (_isPermissionError(e)) {
+        throw Exception(
+          'Droits vendeur manquants sur les articles. Executez supabase/vendor_structures.sql.',
+        );
+      }
+      rethrow;
+    }
+  }
+
   Future<List<OrderPreview>> fetchOrders() async {
     final user = _client.auth.currentUser;
     if (user == null) return [];

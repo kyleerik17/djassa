@@ -86,13 +86,11 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        'Djassa',
-                        style:
-                            Theme.of(context).textTheme.headlineSmall?.copyWith(
-                                  fontFamily: 'Hemi Head',
-                                  color: DjassaTheme.primaryBlack,
-                                ),
+                      Image.asset(
+                        AppConstants.logoAsset,
+                        width: 118,
+                        height: 38,
+                        fit: BoxFit.contain,
                       ),
                       Text(
                         'Votre assistant livraison auto',
