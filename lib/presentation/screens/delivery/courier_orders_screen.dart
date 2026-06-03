@@ -15,6 +15,7 @@ import '../../providers/auth_provider.dart';
 import '../../providers/core_providers.dart';
 import '../../screens/shop/shop_data.dart';
 import '../../widgets/shop/delivery_tracking_widgets.dart';
+import '../../widgets/shared/logout_confirmation_sheet.dart';
 
 class CourierOrdersScreen extends ConsumerStatefulWidget {
   const CourierOrdersScreen({super.key});
@@ -111,7 +112,10 @@ class _CourierOrdersScreenState extends ConsumerState<CourierOrdersScreen> {
                 onGoToProfile: _goToProfile,
               ),
               _CourierHistoryTab(userId: user.id, orders: orders),
-              _CourierProfileTab(onLogout: () => _logout(context)),
+              _CourierProfileTab(
+                onGoToOrders: () => setState(() => _index = 1),
+                onLogout: () => _logout(context),
+              ),
             ],
           ),
         ),
@@ -152,9 +156,14 @@ class _CourierOrdersScreenState extends ConsumerState<CourierOrdersScreen> {
         _ => 'Profil livreur',
       };
 
-  Future<void> _logout(BuildContext context) async {
-    await ref.read(authNotifierProvider.notifier).logoutUser();
-    if (context.mounted) context.go('/login');
+  void _logout(BuildContext context) {
+    showLogoutConfirmationSheet(
+      context,
+      onConfirm: () async {
+        await ref.read(authNotifierProvider.notifier).logoutUser();
+        if (context.mounted) context.go('/login');
+      },
+    );
   }
 }
 
@@ -484,8 +493,12 @@ class _CourierHistoryTab extends StatelessWidget {
 // ---------------------------------------------------------------------------
 
 class _CourierProfileTab extends ConsumerStatefulWidget {
-  const _CourierProfileTab({required this.onLogout});
+  const _CourierProfileTab({
+    required this.onGoToOrders,
+    required this.onLogout,
+  });
 
+  final VoidCallback onGoToOrders;
   final VoidCallback onLogout;
 
   @override
@@ -574,6 +587,14 @@ class _CourierProfileTabState extends ConsumerState<_CourierProfileTab> {
                 onEdit: () => setState(() => _editingProfile = true),
               ),
             const SizedBox(height: 14),
+            _CourierProfileActions(
+              onGoToOrders: widget.onGoToOrders,
+              onRefresh: () {
+                ref.invalidate(courierOrdersProvider);
+                ref.invalidate(courierProfileProvider);
+              },
+            ),
+            const SizedBox(height: 14),
             OutlinedButton.icon(
               onPressed: widget.onLogout,
               icon: const Icon(Icons.logout_rounded),
@@ -617,6 +638,120 @@ class _CourierProfileTabState extends ConsumerState<_CourierProfileTab> {
     } finally {
       if (mounted) setState(() => _saving = false);
     }
+  }
+}
+
+class _CourierProfileActions extends StatelessWidget {
+  const _CourierProfileActions({
+    required this.onGoToOrders,
+    required this.onRefresh,
+  });
+
+  final VoidCallback onGoToOrders;
+  final VoidCallback onRefresh;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: DjassaTheme.primaryWhite,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: DjassaTheme.borderMedium),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Mon espace livreur',
+              style: Theme.of(context).textTheme.titleLarge),
+          const SizedBox(height: 12),
+          _ProfileShortcut(
+            icon: Icons.assignment_turned_in_rounded,
+            title: 'Courses disponibles',
+            subtitle: 'Accepter ou refuser les nouvelles commandes',
+            onTap: onGoToOrders,
+          ),
+          _ProfileShortcut(
+            icon: Icons.notifications_active_rounded,
+            title: 'Alertes commande',
+            subtitle: 'Reception sur le telephone des nouvelles courses',
+            onTap: onRefresh,
+          ),
+          _ProfileShortcut(
+            icon: Icons.support_agent_rounded,
+            title: 'Support livreur',
+            subtitle: 'Aide en cas de blocage pendant une livraison',
+            onTap: () {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Support livreur bientot actif.')),
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ProfileShortcut extends StatelessWidget {
+  const _ProfileShortcut({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(18),
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: DjassaTheme.backgroundSecondary,
+            borderRadius: BorderRadius.circular(18),
+          ),
+          child: Row(
+            children: [
+              CircleAvatar(
+                backgroundColor:
+                    DjassaTheme.accentOrange.withValues(alpha: .12),
+                child: Icon(icon, color: DjassaTheme.accentOrange),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: const TextStyle(fontWeight: FontWeight.w900),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      subtitle,
+                      style: const TextStyle(
+                        color: DjassaTheme.textSecondary,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const Icon(Icons.chevron_right_rounded),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }
 

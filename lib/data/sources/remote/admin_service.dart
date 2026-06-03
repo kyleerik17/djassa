@@ -1,6 +1,4 @@
-// lib/data/sources/remote/admin_service.dart
 import 'package:supabase_flutter/supabase_flutter.dart';
-
 import '../../../core/services/supabase_service.dart';
 
 // ── Models ────────────────────────────────────────────────────
@@ -82,6 +80,8 @@ class AdminProduct {
     required this.imageUrl,
     required this.isActive,
     required this.createdAt,
+    this.creatorName,
+    this.creatorAvatarUrl,
   });
 
   final String id;
@@ -100,10 +100,17 @@ class AdminProduct {
   final String? imageUrl;
   final bool isActive;
   final DateTime? createdAt;
+  final String? creatorName;      // NOUVEAU
+  final String? creatorAvatarUrl; // NOUVEAU
 
   factory AdminProduct.fromJson(Map<String, dynamic> json) {
     final category = json['categories'] is Map
         ? Map<String, dynamic>.from(json['categories'])
+        : <String, dynamic>{};
+
+    // Récupération des données du créateur via la jointure
+    final creator = json['profiles'] is Map
+        ? Map<String, dynamic>.from(json['profiles'])
         : <String, dynamic>{};
 
     return AdminProduct(
@@ -120,12 +127,13 @@ class AdminProduct {
       rating: double.tryParse('${json['rating'] ?? 4.5}') ?? 4.5,
       badge: '${json['badge'] ?? 'Top'}',
       iconName: '${json['icon_name'] ?? 'car'}',
-      imageUrl:
-          json['image_url'] == null || '${json['image_url']}'.trim().isEmpty
-              ? null
-              : '${json['image_url']}',
+      imageUrl: json['image_url'] == null || '${json['image_url']}'.trim().isEmpty
+          ? null
+          : '${json['image_url']}',
       isActive: json['is_active'] == true,
       createdAt: DateTime.tryParse('${json['created_at'] ?? ''}'),
+      creatorName: creator['name'] != null ? '${creator['name']}' : null,
+      creatorAvatarUrl: creator['avatar_url'] != null ? '${creator['avatar_url']}' : null,
     );
   }
 }
@@ -255,7 +263,8 @@ class AdminService {
   Future<List<AdminProduct>> fetchProducts() async {
     final rows = await _client
         .from('products')
-        .select('*, categories(id,name)')
+        // Jointure explicite pour récupérer le nom et l'avatar du créateur
+        .select('*, categories(id,name), profiles:created_by(name, avatar_url)')
         .order('created_at', ascending: false);
 
     return rows
@@ -267,10 +276,15 @@ class AdminService {
 
   Future<AdminProduct> createProduct(AdminProductInput input) async {
     final slug = await _uniqueSlug(input.name);
+    final userId = _client.auth.currentUser?.id; // ID de l'admin connecté
+    
     final row = await _client
         .from('products')
-        .insert(input.toJson(slug: slug))
-        .select('*, categories(id,name)')
+        .insert({
+          ...input.toJson(slug: slug),
+          if (userId != null) 'created_by': userId, // Assignation sécurisée du créateur
+        })
+        .select('*, categories(id,name), profiles:created_by(name, avatar_url)')
         .single();
 
     return AdminProduct.fromJson(Map<String, dynamic>.from(row));
@@ -284,7 +298,7 @@ class AdminService {
         .from('products')
         .update(input.toJson())
         .eq('id', id)
-        .select('*, categories(id,name)')
+        .select('*, categories(id,name), profiles:created_by(name, avatar_url)')
         .single();
 
     return AdminProduct.fromJson(Map<String, dynamic>.from(row));

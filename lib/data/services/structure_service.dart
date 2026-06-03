@@ -22,15 +22,21 @@ class VendorOrder {
     required this.id,
     required this.orderNumber,
     required this.status,
+    required this.deliveryAddress,
     required this.createdAt,
     required this.items,
+    this.clientLatitude,
+    this.clientLongitude,
   });
 
   final String id;
   final String orderNumber;
   final String status;
+  final String deliveryAddress;
   final DateTime? createdAt;
   final List<VendorOrderItem> items;
+  final double? clientLatitude;
+  final double? clientLongitude;
 
   int get total => items.fold<int>(0, (sum, item) => sum + item.total);
   int get itemsCount => items.fold<int>(0, (sum, item) => sum + item.quantity);
@@ -142,7 +148,10 @@ class StructureService {
             orderNumber:
                 '${json['order_number'] ?? 'DJ-${id.substring(0, 6)}'}',
             status: '${json['status'] ?? ''}',
+            deliveryAddress: '${json['delivery_address'] ?? ''}',
             createdAt: DateTime.tryParse('${json['created_at'] ?? ''}'),
+            clientLatitude: double.tryParse('${json['client_latitude']}'),
+            clientLongitude: double.tryParse('${json['client_longitude']}'),
           ),
         );
 
@@ -221,13 +230,19 @@ class _VendorOrderBuilder {
     required this.id,
     required this.orderNumber,
     required this.status,
+    required this.deliveryAddress,
     required this.createdAt,
+    required this.clientLatitude,
+    required this.clientLongitude,
   });
 
   final String id;
   final String orderNumber;
   final String status;
+  final String deliveryAddress;
   final DateTime? createdAt;
+  final double? clientLatitude;
+  final double? clientLongitude;
   final List<VendorOrderItem> items = [];
 
   VendorOrder build() {
@@ -235,8 +250,11 @@ class _VendorOrderBuilder {
       id: id,
       orderNumber: orderNumber,
       status: status,
+      deliveryAddress: deliveryAddress,
       createdAt: createdAt,
       items: List.unmodifiable(items),
+      clientLatitude: clientLatitude,
+      clientLongitude: clientLongitude,
     );
   }
 }

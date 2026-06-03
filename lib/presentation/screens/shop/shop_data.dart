@@ -33,6 +33,8 @@ class ShopProduct {
     required this.compatibility,
     required this.badge,
     this.imageUrl,
+    this.creatorName,
+    this.creatorAvatarUrl,
     this.isActive = true,
   });
 
@@ -49,7 +51,11 @@ class ShopProduct {
   final String compatibility;
   final String badge;
   final String? imageUrl;
+  final String? creatorName;
+  final String? creatorAvatarUrl;
   final bool isActive;
+
+  bool get hasCreator => creatorName != null && creatorName!.trim().isNotEmpty;
 }
 
 class CartLine {

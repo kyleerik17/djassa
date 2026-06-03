@@ -1,15 +1,23 @@
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../../core/services/supabase_service.dart';
 import '../../../core/theme/avatar_picker.dart';
 import '../../../core/theme/djassa_theme.dart';
 import '../../../core/utils/constants.dart';
 import '../../../data/sources/remote/shop_service.dart';
+import '../../../data/services/delivery_tracking_service.dart';
 import '../../../data/services/structure_service.dart';
 import '../../../domain/entities/structure.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/core_providers.dart';
+import '../../widgets/shop/delivery_tracking_widgets.dart';
+import '../../widgets/shared/logout_confirmation_sheet.dart';
 import '../../widgets/vendor/vendor_scaffold.dart';
 import '../shop/shop_data.dart';
 
@@ -160,7 +168,10 @@ class _VendorSpaceScreenState extends ConsumerState<VendorSpaceScreen> {
       isScrollControlled: true,
       useSafeArea: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => _VendorProductFormSheet(categories: categories),
+      builder: (_) => _VendorProductFormSheet(
+        categories: categories,
+        structureId: structure.id,
+      ),
     );
     if (input == null) return;
 
@@ -217,6 +228,7 @@ class _VendorSpaceScreenState extends ConsumerState<VendorSpaceScreen> {
       backgroundColor: Colors.transparent,
       builder: (_) => _VendorProductFormSheet(
         categories: categories,
+        structureId: structure.id,
         product: product,
       ),
     );
@@ -294,9 +306,14 @@ class _VendorSpaceScreenState extends ConsumerState<VendorSpaceScreen> {
     }
   }
 
-  Future<void> _logout(BuildContext context) async {
-    await ref.read(authNotifierProvider.notifier).logoutUser();
-    if (context.mounted) context.go(AppConstants.loginRoute);
+  void _logout(BuildContext context) {
+    showLogoutConfirmationSheet(
+      context,
+      onConfirm: () async {
+        await ref.read(authNotifierProvider.notifier).logoutUser();
+        if (context.mounted) context.go(AppConstants.loginRoute);
+      },
+    );
   }
 
   @override
@@ -792,10 +809,12 @@ class _VendorSpaceScreenState extends ConsumerState<VendorSpaceScreen> {
 class _VendorProductFormSheet extends StatefulWidget {
   const _VendorProductFormSheet({
     required this.categories,
+    required this.structureId,
     this.product,
   });
 
   final List<ShopCategory> categories;
+  final String structureId;
   final ShopProduct? product;
 
   @override
@@ -812,9 +831,14 @@ class _VendorProductFormSheetState extends State<_VendorProductFormSheet> {
   final _oldPriceController = TextEditingController();
   final _stockController = TextEditingController();
   final _badgeController = TextEditingController(text: 'Top');
+  final _picker = ImagePicker();
 
   String? _categoryId;
+  String? _imageUrl;
+  XFile? _pickedImage;
+  Uint8List? _pickedImageBytes;
   bool _isActive = true;
+  bool _submitting = false;
 
   @override
   void initState() {
@@ -837,6 +861,7 @@ class _VendorProductFormSheetState extends State<_VendorProductFormSheet> {
           product.oldPrice <= 0 ? '' : '${product.oldPrice}';
       _stockController.text = '${product.stock}';
       _badgeController.text = product.badge;
+      _imageUrl = product.imageUrl;
       _isActive = product.isActive;
     }
   }
@@ -905,6 +930,25 @@ class _VendorProductFormSheetState extends State<_VendorProductFormSheet> {
                   ],
                 ),
                 const SizedBox(height: 18),
+                _VendorFormSection(
+                  title: 'Photo',
+                  children: [
+                    _ProductImagePicker(
+                      imageUrl: _imageUrl,
+                      imageBytes: _pickedImageBytes,
+                      onPickGallery: () => _pickProductImage(
+                        ImageSource.gallery,
+                      ),
+                      onPickCamera: () => _pickProductImage(
+                        ImageSource.camera,
+                      ),
+                      onRemove: _imageUrl == null && _pickedImageBytes == null
+                          ? null
+                          : _removeProductImage,
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 14),
                 _VendorFormSection(
                   title: 'Informations',
                   children: [
@@ -1022,14 +1066,22 @@ class _VendorProductFormSheetState extends State<_VendorProductFormSheet> {
                         borderRadius: BorderRadius.circular(18),
                       ),
                     ),
-                    onPressed: _submit,
-                    icon: Icon(
-                      isEditing ? Icons.save_rounded : Icons.add_rounded,
-                    ),
+                    onPressed: _submitting ? null : _submit,
+                    icon: _submitting
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : Icon(
+                            isEditing ? Icons.save_rounded : Icons.add_rounded,
+                          ),
                     label: Text(
-                      isEditing
-                          ? 'Enregistrer les changements'
-                          : 'Creer l\'article',
+                      _submitting
+                          ? 'Envoi...'
+                          : isEditing
+                              ? 'Enregistrer les changements'
+                              : 'Creer l\'article',
                     ),
                   ),
                 ),
@@ -1041,25 +1093,211 @@ class _VendorProductFormSheetState extends State<_VendorProductFormSheet> {
     );
   }
 
-  void _submit() {
+  Future<void> _pickProductImage(ImageSource source) async {
+    final picked = await _picker.pickImage(
+      source: source,
+      imageQuality: 84,
+      maxWidth: 1400,
+      maxHeight: 1400,
+    );
+    if (picked == null) return;
+
+    final bytes = await picked.readAsBytes();
+    if (!mounted) return;
+    setState(() {
+      _pickedImage = picked;
+      _pickedImageBytes = bytes;
+    });
+  }
+
+  void _removeProductImage() {
+    setState(() {
+      _pickedImage = null;
+      _pickedImageBytes = null;
+      _imageUrl = null;
+    });
+  }
+
+  Future<String?> _uploadProductImage() async {
+    final picked = _pickedImage;
+    final bytes = _pickedImageBytes;
+    if (picked == null || bytes == null) return _imageUrl;
+
+    final extension = picked.name.split('.').last.toLowerCase();
+    final safeExtension =
+        ['jpg', 'jpeg', 'png', 'webp'].contains(extension) ? extension : 'jpg';
+    final contentType = safeExtension == 'png'
+        ? 'image/png'
+        : safeExtension == 'webp'
+            ? 'image/webp'
+            : 'image/jpeg';
+    final path =
+        '${widget.structureId}/${DateTime.now().millisecondsSinceEpoch}.$safeExtension';
+
+    final storage = SupabaseService.client.storage.from('products');
+    await storage.uploadBinary(
+      path,
+      bytes,
+      fileOptions: FileOptions(
+        contentType: contentType,
+        upsert: true,
+      ),
+    );
+
+    return storage.getPublicUrl(path);
+  }
+
+  Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
     final selectedCategory = widget.categories.firstWhere(
       (category) => category.id == _categoryId,
       orElse: () => widget.categories.first,
     );
 
-    Navigator.of(context).pop(
-      VendorProductInput(
-        categoryId: _categoryId!,
-        name: _nameController.text,
-        description: _descriptionController.text,
-        compatibility: _compatibilityController.text,
-        price: int.parse(_priceController.text),
-        oldPrice: int.tryParse(_oldPriceController.text) ?? 0,
-        stock: int.parse(_stockController.text),
-        badge: _badgeController.text,
-        iconName: selectedCategory.iconName,
-        isActive: _isActive,
+    setState(() => _submitting = true);
+    try {
+      final imageUrl = await _uploadProductImage();
+      if (!mounted) return;
+
+      Navigator.of(context).pop(
+        VendorProductInput(
+          categoryId: _categoryId!,
+          name: _nameController.text,
+          description: _descriptionController.text,
+          compatibility: _compatibilityController.text,
+          price: int.parse(_priceController.text),
+          oldPrice: int.tryParse(_oldPriceController.text) ?? 0,
+          stock: int.parse(_stockController.text),
+          badge: _badgeController.text,
+          iconName: selectedCategory.iconName,
+          imageUrl: imageUrl,
+          isActive: _isActive,
+        ),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => _submitting = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Envoi de la photo impossible: $error')),
+      );
+    }
+  }
+}
+
+class _ProductImagePicker extends StatelessWidget {
+  const _ProductImagePicker({
+    required this.imageUrl,
+    required this.imageBytes,
+    required this.onPickGallery,
+    required this.onPickCamera,
+    required this.onRemove,
+  });
+
+  final String? imageUrl;
+  final Uint8List? imageBytes;
+  final VoidCallback onPickGallery;
+  final VoidCallback onPickCamera;
+  final VoidCallback? onRemove;
+
+  @override
+  Widget build(BuildContext context) {
+    final cleanUrl = imageUrl?.trim();
+    final hasNetworkImage = cleanUrl != null && cleanUrl.isNotEmpty;
+    final hasImage = imageBytes != null || hasNetworkImage;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        ClipRRect(
+          borderRadius: BorderRadius.circular(18),
+          child: AspectRatio(
+            aspectRatio: 16 / 9,
+            child: Container(
+              color: DjassaTheme.backgroundSecondary,
+              child: hasImage
+                  ? Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        if (imageBytes != null)
+                          Image.memory(imageBytes!, fit: BoxFit.cover)
+                        else
+                          Image.network(
+                            cleanUrl!,
+                            fit: BoxFit.cover,
+                            errorBuilder: (_, __, ___) =>
+                                const _ProductImagePlaceholder(),
+                          ),
+                        if (onRemove != null)
+                          Positioned(
+                            top: 8,
+                            right: 8,
+                            child: IconButton.filled(
+                              style: IconButton.styleFrom(
+                                backgroundColor:
+                                    Colors.black.withValues(alpha: .55),
+                                foregroundColor: DjassaTheme.primaryWhite,
+                              ),
+                              tooltip: 'Retirer la photo',
+                              onPressed: onRemove,
+                              icon: const Icon(Icons.close_rounded),
+                            ),
+                          ),
+                      ],
+                    )
+                  : const _ProductImagePlaceholder(),
+            ),
+          ),
+        ),
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            Expanded(
+              child: OutlinedButton.icon(
+                onPressed: onPickGallery,
+                icon: const Icon(Icons.photo_library_rounded),
+                label: const Text('Galerie'),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: OutlinedButton.icon(
+                onPressed: onPickCamera,
+                icon: const Icon(Icons.photo_camera_rounded),
+                label: const Text('Camera'),
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class _ProductImagePlaceholder extends StatelessWidget {
+  const _ProductImagePlaceholder();
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          CircleAvatar(
+            radius: 24,
+            backgroundColor: DjassaTheme.accentOrange.withValues(alpha: .12),
+            child: const Icon(
+              Icons.add_photo_alternate_rounded,
+              color: DjassaTheme.accentOrange,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Photo de l\'article',
+            style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                  fontWeight: FontWeight.w800,
+                ),
+          ),
+        ],
       ),
     );
   }
@@ -2012,18 +2250,22 @@ class _NoVendorOrders extends StatelessWidget {
   }
 }
 
-class _VendorOrderCard extends StatelessWidget {
+class _VendorOrderCard extends ConsumerWidget {
   const _VendorOrderCard({required this.order});
 
   final VendorOrder order;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final date = order.createdAt == null
         ? ''
         : '${order.createdAt!.day.toString().padLeft(2, '0')}/'
             '${order.createdAt!.month.toString().padLeft(2, '0')}/'
             '${order.createdAt!.year}';
+    final tracking = _vendorTrackingFromOrder(order);
+    final snapshotAsync = tracking == null
+        ? null
+        : ref.watch(liveDeliveryTrackingProvider(tracking));
 
     return Container(
       padding: const EdgeInsets.all(14),
@@ -2055,6 +2297,68 @@ class _VendorOrderCard extends StatelessWidget {
             ].join(' · '),
             style: const TextStyle(color: DjassaTheme.textSecondary),
           ),
+          if (order.deliveryAddress.trim().isNotEmpty) ...[
+            const SizedBox(height: 6),
+            Row(
+              children: [
+                const Icon(
+                  Icons.location_on_outlined,
+                  size: 16,
+                  color: DjassaTheme.textSecondary,
+                ),
+                const SizedBox(width: 5),
+                Expanded(
+                  child: Text(
+                    order.deliveryAddress,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: DjassaTheme.textSecondary,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+          if (tracking != null && snapshotAsync != null) ...[
+            const SizedBox(height: 12),
+            snapshotAsync.when(
+              loading: () => RealtimeDeliveryMap(
+                tracking: tracking,
+                snapshot: DeliveryTrackingService.fallbackSnapshot(
+                  DeliveryTrackingQuery(
+                    orderId: tracking.orderId,
+                    address: tracking.address,
+                    createdAt: tracking.createdAt,
+                    deliveryAt: tracking.deliveryAt,
+                    clientLatitude: tracking.clientLatitude,
+                    clientLongitude: tracking.clientLongitude,
+                  ),
+                  DateTime.now(),
+                ),
+              ),
+              error: (_, __) => RealtimeDeliveryMap(
+                tracking: tracking,
+                snapshot: DeliveryTrackingService.fallbackSnapshot(
+                  DeliveryTrackingQuery(
+                    orderId: tracking.orderId,
+                    address: tracking.address,
+                    createdAt: tracking.createdAt,
+                    deliveryAt: tracking.deliveryAt,
+                    clientLatitude: tracking.clientLatitude,
+                    clientLongitude: tracking.clientLongitude,
+                  ),
+                  DateTime.now(),
+                ),
+              ),
+              data: (snapshot) => RealtimeDeliveryMap(
+                tracking: tracking,
+                snapshot: snapshot,
+              ),
+            ),
+          ],
           const SizedBox(height: 10),
           ...order.items.take(3).map(
                 (item) => Padding(
@@ -2091,6 +2395,26 @@ class _VendorOrderCard extends StatelessWidget {
       ),
     );
   }
+}
+
+DeliveryTracking? _vendorTrackingFromOrder(VendorOrder order) {
+  final address = order.deliveryAddress.trim();
+  if (address.isEmpty) return null;
+  final createdAt = order.createdAt ?? DateTime.now();
+  return DeliveryTracking(
+    orderId: order.id,
+    orderNumber: order.orderNumber,
+    address: address,
+    createdAt: createdAt,
+    deliveryAt: DateTime(
+      createdAt.year,
+      createdAt.month,
+      createdAt.day + 1,
+      18,
+    ),
+    clientLatitude: order.clientLatitude,
+    clientLongitude: order.clientLongitude,
+  );
 }
 
 class _OrderStatusChip extends StatelessWidget {

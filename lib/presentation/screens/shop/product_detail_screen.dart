@@ -92,51 +92,81 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Hero(
-            tag: 'product-${product.id}',
-            child: Container(
-              height: 260,
-              width: double.infinity,
-              decoration: BoxDecoration(
+       Hero(
+  tag: 'product-${product.id}',
+  child: Container(
+    height: 280,
+    width: double.infinity,
+    decoration: BoxDecoration(
+      color: DjassaTheme.primaryWhite,
+      borderRadius: BorderRadius.circular(32),
+      border: Border.all(color: DjassaTheme.borderMedium),
+      boxShadow: DjassaTheme.shadowLight,
+    ),
+    child: Stack(
+      children: [
+        // ✅ POSITIONED.FILL force le média à prendre TOUT l'espace
+        Positioned.fill(
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(32),
+            child: ProductMedia(
+              product: product,
+              iconSize: 160,
+            ),
+          ),
+        ),
+        
+        // Badge en haut à gauche
+        Positioned(
+          left: 18,
+          top: 18,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            decoration: BoxDecoration(
+              color: DjassaTheme.accentOrange,
+              borderRadius: BorderRadius.circular(999),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.1),
+                  blurRadius: 4,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: Text(
+              product.badge,
+              style: const TextStyle(
                 color: DjassaTheme.primaryWhite,
-                borderRadius: BorderRadius.circular(32),
-                border: Border.all(color: DjassaTheme.borderMedium),
-                boxShadow: DjassaTheme.shadowLight,
-              ),
-              child: Stack(
-                children: [
-                  Center(
-                    child: Icon(
-                      product.icon,
-                      size: 118,
-                      color: DjassaTheme.primaryBlack.withValues(alpha: .82),
-                    ),
-                  ),
-                  Positioned(
-                    left: 18,
-                    top: 18,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 8,
-                      ),
-                      decoration: BoxDecoration(
-                        color: DjassaTheme.accentOrange,
-                        borderRadius: BorderRadius.circular(999),
-                      ),
-                      child: Text(
-                        product.badge,
-                        style: const TextStyle(
-                          color: DjassaTheme.primaryWhite,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
+                fontWeight: FontWeight.w800,
               ),
             ),
           ),
+        ),
+        
+        // Bouton favori en haut à droite
+        Positioned(
+          right: 18,
+          top: 18,
+          child: Container(
+            decoration: BoxDecoration(
+              color: DjassaTheme.primaryWhite.withValues(alpha: 0.9),
+              shape: BoxShape.circle,
+              boxShadow: DjassaTheme.shadowLight,
+            ),
+            child: IconButton(
+              onPressed: () => context.go('/favorites'),
+              icon: const Icon(
+                Icons.favorite_border_rounded,
+                color: DjassaTheme.accentOrange,
+                size: 24,
+              ),
+            ),
+          ),
+        ),
+      ],
+    ),
+  ),
+),
           const SizedBox(height: 20),
           Text(
             product.category,
@@ -147,6 +177,7 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
           ),
           const SizedBox(height: 8),
           Text(product.name, style: Theme.of(context).textTheme.displaySmall),
+          ProductCreatorLine(product: product),
           const SizedBox(height: 12),
           Row(
             children: [
@@ -179,7 +210,7 @@ class _ProductDetailScreenState extends ConsumerState<ProductDetailScreen> {
           const SectionTitle(title: 'Articles similaires'),
           const SizedBox(height: 12),
           SizedBox(
-            height: 236,
+            height: 252,
             child: ListView.separated(
               scrollDirection: Axis.horizontal,
               itemCount: products

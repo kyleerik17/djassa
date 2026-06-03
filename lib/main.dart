@@ -8,6 +8,7 @@ import 'core/router/router_provider.dart';
 import 'presentation/providers/core_providers.dart';
 import 'presentation/providers/auth_provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'core/services/order_notification_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -18,6 +19,7 @@ void main() async {
   );
 
   final sharedPreferences = await SharedPreferences.getInstance();
+  await OrderNotificationService().initialize();
 
   SystemChrome.setSystemUIOverlayStyle(SystemUiOverlayStyle.light);
 
@@ -40,6 +42,9 @@ class DjassaApp extends ConsumerStatefulWidget {
 }
 
 class _DjassaAppState extends ConsumerState<DjassaApp> {
+  final _orderNotificationService = OrderNotificationService();
+  String? _watchedUserId;
+
   @override
   void initState() {
     super.initState();
@@ -50,8 +55,20 @@ class _DjassaAppState extends ConsumerState<DjassaApp> {
   }
 
   @override
+  void dispose() {
+    _orderNotificationService.stop();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     final router = ref.watch(goRouterProvider);
+    final userId = ref.watch(authNotifierProvider).user?.id;
+    if (_watchedUserId != userId) {
+      _watchedUserId = userId;
+      Future.microtask(() => _orderNotificationService.watchUser(userId));
+    }
+
     return Sizer(
       builder: (context, orientation, deviceType) {
         return MaterialApp.router(

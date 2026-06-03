@@ -130,12 +130,19 @@ using (
 -- Commandes vendeur sans accès au profil client.
 -- La fonction ne retourne que les infos nécessaires à la boutique:
 -- numéro, statut, date et articles vendus.
+alter table if exists public.orders
+  add column if not exists client_latitude double precision,
+  add column if not exists client_longitude double precision;
+
 drop function if exists public.get_vendor_orders();
 create or replace function public.get_vendor_orders()
 returns table (
   order_id uuid,
   order_number text,
   status text,
+  delivery_address text,
+  client_latitude double precision,
+  client_longitude double precision,
   created_at timestamptz,
   item_name text,
   quantity integer,
@@ -150,6 +157,9 @@ as '
     o.id as order_id,
     o.order_number,
     o.status,
+    o.delivery_address,
+    nullif(o.client_latitude::text, '''')::double precision as client_latitude,
+    nullif(o.client_longitude::text, '''')::double precision as client_longitude,
     o.created_at,
     oi.product_name as item_name,
     oi.quantity,

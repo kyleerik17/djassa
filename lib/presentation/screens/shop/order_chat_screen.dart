@@ -83,8 +83,15 @@ class _OrderChatScreenState extends ConsumerState<OrderChatScreen> {
         backgroundColor: DjassaTheme.backgroundSecondary,
         elevation: 0,
         leading: IconButton(
-          onPressed: () => context.pop(),
           icon: const Icon(Icons.arrow_back_rounded),
+          onPressed: () {
+            // ✅ Retour robuste : pop si possible, sinon go('/orders')
+            if (context.canPop()) {
+              context.pop();
+            } else {
+              context.go('/orders');
+            }
+          },
         ),
         title: FutureBuilder<OrderConversation>(
           future: _conversationFuture,
@@ -131,9 +138,6 @@ class _OrderChatScreenState extends ConsumerState<OrderChatScreen> {
                       .watchMessages(conversation.id),
                   builder: (context, messagesSnapshot) {
                     final messages = messagesSnapshot.data ?? const [];
-                    WidgetsBinding.instance.addPostFrameCallback(
-                      (_) => _scrollToBottom(),
-                    );
 
                     if (messagesSnapshot.hasError) {
                       return _ChatError(message: '${messagesSnapshot.error}');
@@ -142,6 +146,10 @@ class _OrderChatScreenState extends ConsumerState<OrderChatScreen> {
                       return const _EmptyChat();
                     }
 
+                    WidgetsBinding.instance.addPostFrameCallback(
+                      (_) => _scrollToBottom(),
+                    );
+
                     return ListView.builder(
                       controller: _scrollController,
                       padding: const EdgeInsets.fromLTRB(16, 10, 16, 18),
@@ -149,6 +157,7 @@ class _OrderChatScreenState extends ConsumerState<OrderChatScreen> {
                       itemBuilder: (context, index) {
                         final message = messages[index];
                         return _MessageBubble(
+                          key: ValueKey(message.id),
                           message: message,
                           isMine: message.senderId == currentUserId,
                         );
@@ -235,6 +244,7 @@ class _MessageComposer extends StatelessWidget {
 
 class _MessageBubble extends StatelessWidget {
   const _MessageBubble({
+    super.key,
     required this.message,
     required this.isMine,
   });
@@ -266,10 +276,12 @@ class _MessageBubble extends StatelessWidget {
           border: isMine ? null : Border.all(color: DjassaTheme.borderLight),
         ),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.end,
+          crossAxisAlignment:
+              isMine ? CrossAxisAlignment.end : CrossAxisAlignment.start,
           children: [
             Text(
               message.body,
+              textAlign: isMine ? TextAlign.right : TextAlign.left,
               style: TextStyle(
                 color:
                     isMine ? DjassaTheme.primaryWhite : DjassaTheme.textPrimary,

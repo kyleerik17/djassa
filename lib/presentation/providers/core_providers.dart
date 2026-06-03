@@ -16,6 +16,7 @@ import '../../data/services/client_order_tracking_service.dart';
 import '../../data/services/order_chat_service.dart';
 import '../../data/services/structure_service.dart';
 import '../../core/services/geniuspay_service.dart';
+import '../../core/services/location_commune_service.dart';
 import '../../core/services/supabase_service.dart';
 import '../../domain/entities/structure.dart';
 import '../screens/shop/shop_data.dart';
@@ -59,6 +60,180 @@ const Map<String, List<String>> deliveryCitiesCommunes = {
   'Anyama': ['Anyama Centre', 'Afeffy'],
   'Songon': ['Songon Centre'],
   'Grand-Bassam': ['Grand-Bassam Centre', 'Moossou'],
+};
+
+const Map<String, List<String>> deliveryCommuneNeighborhoods = {
+  'Abobo': [
+    'Abobo Baoule',
+    'Abobo Belleville',
+    'Abobo Centre',
+    'Abobo Gare',
+    'Abobo N\'Dotre',
+    'Abobo PK18',
+    'Agbekoi',
+    'Anador',
+    'Avocatier',
+    'Banco',
+    'BC',
+    'Clouetcha',
+    'Dokui',
+    'Kennedy',
+    'Plaque',
+    'Sagam',
+    'Sogefiha',
+    'Sos Abobo',
+  ],
+  'AdjamÃ©': [
+    '220 Logements',
+    'Adjame Centre',
+    'Bromakote',
+    'Dallas',
+    'Forum',
+    'Gare Nord',
+    'Liberte',
+    'Mairie',
+    'Marche Gouro',
+    'Mirador',
+    'Saint Michel',
+    'Williamsville',
+  ],
+  'AttÃ©coubÃ©': [
+    'Agban Attie',
+    'Attecoube 3',
+    'Attecoube Centre',
+    'Banco',
+    'Boribana',
+    'Cite Fairmont',
+    'Djen Ecarre',
+    'Douagoville',
+    'Fromager',
+    'Locodjro',
+    'Mosquee',
+    'Sante',
+  ],
+  'Cocody': [
+    '2 Plateaux',
+    'Angre',
+    'Ambassades',
+    'Attoban',
+    'Beverly Hills',
+    'Blockhauss',
+    'Bonoumin',
+    'Cocody Centre',
+    'Danga',
+    'Faya',
+    'Genie 2000',
+    'II Plateaux Vallon',
+    'Les Oscars',
+    'Mermoz',
+    'Palmeraie',
+    'Riviera 1',
+    'Riviera 2',
+    'Riviera 3',
+    'Riviera 4',
+    'Riviera Bonoumin',
+    'Riviera Golf',
+    'Riviera M\'Badon',
+    'Saint Jean',
+    'Sodefor',
+  ],
+  'Koumassi': [
+    '05',
+    'Aklomiabla',
+    'Divo',
+    'Grand Carrefour',
+    'Inch Allah',
+    'Koumassi Campement',
+    'Koumassi Centre',
+    'Nord-Est',
+    'Prodomo',
+    'Remblais',
+    'Sicogi',
+    'Sopim',
+    'Zone Industrielle',
+  ],
+  'Marcory': [
+    'Anoumabo',
+    'Bietry',
+    'Champroux',
+    'GFCI',
+    'Marcory Centre',
+    'Marcory Residentiel',
+    'Prima',
+    'Remblai',
+    'Sicogi',
+    'Zone 4',
+    'Zone Industrielle',
+  ],
+  'Plateau': [
+    'Avenue Chardy',
+    'Avenue Nogues',
+    'Cite Administrative',
+    'Commerce',
+    'Gare Sud',
+    'Indenie',
+    'Plateau Centre',
+    'Presidence',
+    'Sorbonne',
+  ],
+  'Port-BouÃ«t': [
+    'Adjouffou',
+    'Anani',
+    'Aeroport',
+    'Gonzagueville',
+    'Jean Folly',
+    'Petit Bassam',
+    'Phare',
+    'Port-Bouet Centre',
+    'Sogefiha',
+    'Vridi',
+    'Vridi Canal',
+    'Vridi Cite',
+    'Zone Industrielle',
+  ],
+  'Treichville': [
+    'Arras',
+    'Avenue 8',
+    'Biafra',
+    'Cite Administrative',
+    'Habitat',
+    'Marche de Treichville',
+    'Nanan Yamousso',
+    'Port',
+    'Treichville Centre',
+    'Zone 1',
+    'Zone 2',
+    'Zone 3',
+  ],
+  'Yopougon': [
+    'Andokoi',
+    'Ananeraie',
+    'Banco Nord',
+    'Camp Militaire',
+    'Cite CIE',
+    'Cite Verte',
+    'Gesco',
+    'Koweit',
+    'Lubafrique',
+    'Maroc',
+    'Niangon Nord',
+    'Niangon Sud',
+    'Port-Bouet 2',
+    'Sable',
+    'Selmer',
+    'Sicogi',
+    'Sideci',
+    'Sogefiha',
+    'Toit Rouge',
+    'Wassakara',
+    'Yopougon Centre',
+  ],
+  'Bingerville Centre': ['Bingerville Centre'],
+  'Anyama Centre': ['Anyama Centre'],
+  'Afeffy': ['Afeffy'],
+  'Songon Centre': ['Songon Centre'],
+  'Grand-Bassam Centre': ['Grand-Bassam Centre'],
+  'Moossou': ['Moossou'],
 };
 
 class DeliveryAddress {
@@ -417,6 +592,14 @@ final structureServiceProvider = Provider<StructureService>((ref) {
 
 final geniusPayServiceProvider = Provider<GeniusPayService>((ref) {
   return GeniusPayService(SupabaseService.client);
+});
+
+final locationCommuneServiceProvider = Provider<LocationCommuneService>((ref) {
+  return LocationCommuneService();
+});
+
+final currentCommuneProvider = FutureProvider<CommunePosition>((ref) async {
+  return ref.watch(locationCommuneServiceProvider).currentCommune();
 });
 
 final clientOrderTrackingServiceProvider =

@@ -16,6 +16,7 @@ class VendorProductInput {
     required this.stock,
     required this.badge,
     required this.iconName,
+    this.imageUrl,
     required this.isActive,
   });
 
@@ -28,6 +29,7 @@ class VendorProductInput {
   final int stock;
   final String badge;
   final String iconName;
+  final String? imageUrl;
   final bool isActive;
 
   Map<String, dynamic> toJson({required String slug}) {
@@ -43,6 +45,9 @@ class VendorProductInput {
       'rating': 4.5,
       'badge': badge.trim().isEmpty ? 'Top' : badge.trim(),
       'icon_name': iconName.trim().isEmpty ? 'storefront_rounded' : iconName,
+      'image_url': imageUrl == null || imageUrl!.trim().isEmpty
+          ? null
+          : imageUrl!.trim(),
       'is_active': isActive,
     };
   }
@@ -98,7 +103,7 @@ class ShopService {
   }) async {
     dynamic request = _client
         .from('products')
-        .select('*, categories(name)')
+        .select('*, categories(name), profiles:created_by(name, avatar_url)')
         .eq('is_active', true);
 
     if (query != null && query.trim().isNotEmpty) {
@@ -124,7 +129,9 @@ class ShopService {
     try {
       final rows = await _client
           .from('products')
-          .select('*, categories(id,name)')
+          .select(
+            '*, categories(id,name), profiles:created_by(name, avatar_url)',
+          )
           .eq('structure_id', id)
           .order('created_at', ascending: false);
 
@@ -154,13 +161,17 @@ class ShopService {
     }
 
     final slug = await _uniqueProductSlug(input.name, structureId: id);
-    final payload = input.toJson(slug: slug)..['structure_id'] = id;
+    final payload = input.toJson(slug: slug)
+      ..['structure_id'] = id
+      ..['created_by'] = user.id;
 
     try {
       final row = await _client
           .from('products')
           .insert(payload)
-          .select('*, categories(id,name)')
+          .select(
+            '*, categories(id,name), profiles:created_by(name, avatar_url)',
+          )
           .single();
       return _productFromRow(row);
     } on PostgrestException catch (e) {
@@ -202,7 +213,9 @@ class ShopService {
           .update(input.toJson(slug: _slugify(input.name)))
           .eq('id', cleanProductId)
           .eq('structure_id', cleanStructureId)
-          .select('*, categories(id,name)')
+          .select(
+            '*, categories(id,name), profiles:created_by(name, avatar_url)',
+          )
           .single();
       return _productFromRow(row);
     } on PostgrestException catch (e) {
@@ -295,6 +308,8 @@ class ShopService {
     required String customerName,
     required String customerPhone,
     required String deliveryAddress,
+    double? clientLatitude,
+    double? clientLongitude,
   }) async {
     final user = _client.auth.currentUser;
     if (user == null) throw Exception('Connectez-vous avant de commander.');
@@ -322,61 +337,68 @@ class ShopService {
     final total = subtotal + deliveryFee;
 
     late Map<String, dynamic> order;
+    final orderPayload = {
+      'user_id': user.id,
+      'customer_name':
+          customerName.trim().isEmpty ? 'Client Djassa' : customerName.trim(),
+      'customer_phone': cleanPhone,
+      'delivery_address': deliveryAddress.trim(),
+      'client_latitude': clientLatitude,
+      'client_longitude': clientLongitude,
+      'subtotal': subtotal,
+      'delivery_fee': deliveryFee,
+      'total': total,
+      'status': 'pending_payment',
+    };
 
     try {
-      order = await _client
-          .from('orders')
-          .insert({
-            'user_id': user.id,
-            'customer_name': customerName.trim().isEmpty
-                ? 'Client Djassa'
-                : customerName.trim(),
-            'customer_phone': cleanPhone,
-            'delivery_address': deliveryAddress.trim(),
-            'subtotal': subtotal,
-            'delivery_fee': deliveryFee,
-            'total': total,
-            'status': 'pending_payment',
-          })
-          .select()
-          .single();
+      order =
+          await _client.from('orders').insert(orderPayload).select().single();
     } on PostgrestException catch (e) {
-      debugPrint(
-        '[ShopService.createOrderDraft] INSERT orders '
-        'code=${e.code} message=${e.message} details=${e.details}',
-      );
-
-      // Messages lisibles selon le code d'erreur Postgres
-      if (e.code == '23514') {
-        // Violation CHECK
-        throw Exception(
-          'Données invalides pour la commande. '
-          'Vérifiez votre numéro de téléphone.',
+      if (e.code == '42703') {
+        orderPayload
+          ..remove('client_latitude')
+          ..remove('client_longitude');
+        order =
+            await _client.from('orders').insert(orderPayload).select().single();
+      } else {
+        debugPrint(
+          '[ShopService.createOrderDraft] INSERT orders '
+          'code=${e.code} message=${e.message} details=${e.details}',
         );
-      }
-      if (e.code == '23502') {
-        // NOT NULL violation - plus précis pour le debugging
-        final details = e.details?.toString() ?? '';
-        if (details.contains('changed_by_role')) {
-          // Cette erreur ne devrait plus arriver si le trigger est corrigé
-          debugPrint(
-            '[ShopService] Trigger order_status_history : '
-            'changed_by_role est NULL. Vérifiez le trigger.',
+
+        // Messages lisibles selon le code d'erreur Postgres
+        if (e.code == '23514') {
+          // Violation CHECK
+          throw Exception(
+            'Données invalides pour la commande. '
+            'Vérifiez votre numéro de téléphone.',
+          );
+        }
+        if (e.code == '23502') {
+          // NOT NULL violation - plus précis pour le debugging
+          final details = e.details?.toString() ?? '';
+          if (details.contains('changed_by_role')) {
+            // Cette erreur ne devrait plus arriver si le trigger est corrigé
+            debugPrint(
+              '[ShopService] Trigger order_status_history : '
+              'changed_by_role est NULL. Vérifiez le trigger.',
+            );
+          }
+          throw Exception(
+            'Un champ obligatoire est manquant dans la commande. '
+            'Contactez le support si le problème persiste.',
+          );
+        }
+        if (_isPermissionError(e)) {
+          throw Exception(
+            'Vous n\'avez pas les droits pour passer une commande.',
           );
         }
         throw Exception(
-          'Un champ obligatoire est manquant dans la commande. '
-          'Contactez le support si le problème persiste.',
+          'Impossible de créer la commande. Veuillez réessayer.',
         );
       }
-      if (_isPermissionError(e)) {
-        throw Exception(
-          'Vous n\'avez pas les droits pour passer une commande.',
-        );
-      }
-      throw Exception(
-        'Impossible de créer la commande. Veuillez réessayer.',
-      );
     }
 
     final orderId = order['id'] as String;
@@ -475,6 +497,11 @@ class ShopService {
     final categoryMap = json['categories'] is Map
         ? Map<String, dynamic>.from(json['categories'])
         : <String, dynamic>{};
+    final creatorMap = json['profiles'] is Map
+        ? Map<String, dynamic>.from(json['profiles'])
+        : <String, dynamic>{};
+    final creatorName = '${creatorMap['name'] ?? ''}'.trim();
+    final creatorAvatarUrl = '${creatorMap['avatar_url'] ?? ''}'.trim();
 
     return ShopProduct(
       id: '${json['id'] ?? ''}',
@@ -492,6 +519,8 @@ class ShopService {
       imageUrl: json['image_url'] == null || '${json['image_url']}'.isEmpty
           ? null
           : '${json['image_url']}',
+      creatorName: creatorName.isEmpty ? null : creatorName,
+      creatorAvatarUrl: creatorAvatarUrl.isEmpty ? null : creatorAvatarUrl,
       isActive: json['is_active'] != false,
     );
   }

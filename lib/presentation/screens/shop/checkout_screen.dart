@@ -135,13 +135,14 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                 : user.fullName.trim(),
             customerPhone: user.phone,
             deliveryAddress: _deliveryAddress,
+            clientLatitude: clientPosition?.latitude,
+            clientLongitude: clientPosition?.longitude,
           );
 
       final orderId = order['id'] as String;
       final total = (order['total'] as num?)?.toInt() ?? 0;
       final shortId = orderId.length > 6 ? orderId.substring(0, 6) : orderId;
-      final orderNumber =
-          order['order_number']?.toString() ?? 'DJ-$shortId';
+      final orderNumber = order['order_number']?.toString() ?? 'DJ-$shortId';
 
       // 4. Démarre le tracking livraison
       final trackingNotifier = ref.read(deliveryTrackingProvider.notifier);
@@ -352,8 +353,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                   const SizedBox(height: 8),
                   Text(
                     'Veuillez sélectionner une ville et une commune',
-                    style:
-                        TextStyle(color: Colors.red.shade600, fontSize: 12),
+                    style: TextStyle(color: Colors.red.shade600, fontSize: 12),
                   ),
                 ],
 
@@ -425,18 +425,17 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                       Text(
                         'Total à payer',
                         style: TextStyle(
-                          color: DjassaTheme.primaryWhite
-                              .withValues(alpha: .72),
+                          color:
+                              DjassaTheme.primaryWhite.withValues(alpha: .72),
                         ),
                       ),
                       const SizedBox(height: 5),
                       Text(
                         formatPrice(total),
-                        style:
-                            Theme.of(context).textTheme.titleLarge?.copyWith(
-                                  color: DjassaTheme.primaryWhite,
-                                  fontSize: 22,
-                                ),
+                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                              color: DjassaTheme.primaryWhite,
+                              fontSize: 22,
+                            ),
                       ),
                     ],
                   ),

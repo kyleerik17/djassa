@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/services/location_commune_service.dart';
 import '../../../core/theme/djassa_theme.dart';
 import '../../../domain/order_progress.dart';
 import '../../providers/auth_provider.dart';
@@ -51,7 +52,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _HomeHero(userName: user?.fullName),
+          _HomeHero(
+            locationAsync: ref.watch(currentCommuneProvider),
+            categoriesAsync: categoriesAsync,
+          ),
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 18, 16, 0),
             child: Text(
@@ -165,7 +169,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                         crossAxisCount: 2,
                         mainAxisSpacing: 14,
                         crossAxisSpacing: 14,
-                        childAspectRatio: .67,
+                        childAspectRatio: .61,
                       ),
                       itemBuilder: (context, index) {
                         return ProductCard(product: products[index]);
@@ -180,13 +184,30 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   }
 }
 
-class _HomeHero extends StatelessWidget {
-  const _HomeHero({this.userName});
+class _HomeHero extends ConsumerStatefulWidget {
+  const _HomeHero({
+    required this.locationAsync,
+    required this.categoriesAsync,
+  });
 
-  final String? userName;
+  final AsyncValue<CommunePosition> locationAsync;
+  final AsyncValue<List<dynamic>> categoriesAsync;
+
+  @override
+  ConsumerState<_HomeHero> createState() => _HomeHeroState();
+}
+
+class _HomeHeroState extends ConsumerState<_HomeHero> {
+  String? _selectedCategoryName;
 
   @override
   Widget build(BuildContext context) {
+    final locationLabel = widget.locationAsync.when(
+      data: (location) => location.label,
+      loading: () => 'Localisation...',
+      error: (_, __) => LocationCommuneService.fallback.label,
+    );
+
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.fromLTRB(16, 6, 16, 22),
@@ -199,15 +220,26 @@ class _HomeHero extends StatelessWidget {
         children: [
           Row(
             children: [
-              const Icon(
-                Icons.location_on_outlined,
-                color: DjassaTheme.primaryWhite,
-                size: 20,
+              IconButton(
+                tooltip: 'Actualiser la position',
+                constraints: const BoxConstraints.tightFor(
+                  width: 32,
+                  height: 32,
+                ),
+                padding: EdgeInsets.zero,
+                onPressed: () => ref.invalidate(currentCommuneProvider),
+                icon: const Icon(
+                  Icons.location_on_outlined,
+                  color: DjassaTheme.primaryWhite,
+                  size: 20,
+                ),
               ),
-              const SizedBox(width: 6),
+              const SizedBox(width: 2),
               Expanded(
                 child: Text(
-                  'Abidjan',
+                  locationLabel,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
                         color: DjassaTheme.primaryWhite,
                         fontWeight: FontWeight.w800,
@@ -261,15 +293,41 @@ class _HomeHero extends StatelessWidget {
           const SizedBox(height: 14),
           SizedBox(
             height: 40,
-            child: ListView(
-              scrollDirection: Axis.horizontal,
-              children: const [
-                _HeaderChip(label: 'Vehicules', selected: true),
-                _HeaderChip(label: 'Electronique'),
-                _HeaderChip(label: 'Mode'),
-                _HeaderChip(label: 'Maison'),
-                _HeaderChip(label: 'Telephones'),
-              ],
+            child: widget.categoriesAsync.when(
+              loading: () => const Center(
+                child: SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: DjassaTheme.primaryWhite,
+                  ),
+                ),
+              ),
+              error: (_, __) => const SizedBox.shrink(),
+              data: (categories) {
+                if (categories.isEmpty) return const SizedBox.shrink();
+                
+                return ListView.builder(
+                  scrollDirection: Axis.horizontal,
+                  itemCount: categories.length,
+                  itemBuilder: (context, index) {
+                    final category = categories[index];
+                    final isSelected = _selectedCategoryName == category.name;
+                    
+                    return _HeaderChip(
+                      label: category.name,
+                      selected: isSelected,
+                      onTap: () {
+                        setState(() {
+                          _selectedCategoryName = isSelected ? null : category.name;
+                        });
+                        context.go('/search?category=${category.name}');
+                      },
+                    );
+                  },
+                );
+              },
             ),
           ),
         ],
@@ -279,28 +337,36 @@ class _HomeHero extends StatelessWidget {
 }
 
 class _HeaderChip extends StatelessWidget {
-  const _HeaderChip({required this.label, this.selected = false});
+  const _HeaderChip({
+    required this.label,
+    this.selected = false,
+    this.onTap,
+  });
 
   final String label;
   final bool selected;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.only(right: 8),
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-      decoration: BoxDecoration(
-        color: selected
-            ? DjassaTheme.accentOrange
-            : DjassaTheme.primaryWhite.withValues(alpha: .12),
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Text(
-        label,
-        style: const TextStyle(
-          color: DjassaTheme.primaryWhite,
-          fontWeight: FontWeight.w800,
-          fontSize: 12,
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        margin: const EdgeInsets.only(right: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        decoration: BoxDecoration(
+          color: selected
+              ? DjassaTheme.accentOrange
+              : DjassaTheme.primaryWhite.withValues(alpha: .12),
+          borderRadius: BorderRadius.circular(999),
+        ),
+        child: Text(
+          label,
+          style: const TextStyle(
+            color: DjassaTheme.primaryWhite,
+            fontWeight: FontWeight.w800,
+            fontSize: 12,
+          ),
         ),
       ),
     );

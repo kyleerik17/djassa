@@ -118,9 +118,21 @@ class OrderChatService {
         .eq('conversation_id', conversationId)
         .order('created_at')
         .map(
-          (rows) => rows
-              .map((row) => _messageFromRow(Map<String, dynamic>.from(row)))
-              .toList(),
+          (rows) {
+            final byId = <String, OrderChatMessage>{};
+            for (final row in rows) {
+              final message = _messageFromRow(Map<String, dynamic>.from(row));
+              if (message.id.isEmpty) continue;
+              byId[message.id] = message;
+            }
+            final messages = byId.values.toList()
+              ..sort((a, b) {
+                final dateCompare = a.createdAt.compareTo(b.createdAt);
+                if (dateCompare != 0) return dateCompare;
+                return a.id.compareTo(b.id);
+              });
+            return messages;
+          },
         );
   }
 

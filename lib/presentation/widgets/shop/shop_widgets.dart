@@ -461,9 +461,9 @@ class ProductCard extends StatelessWidget {
                 tag: 'product-${product.id}',
                 child: Container(
                   width: double.infinity,
-                  decoration: BoxDecoration(
+                  decoration: const BoxDecoration(
                     color: DjassaTheme.backgroundSecondary,
-                    borderRadius: const BorderRadius.vertical(
+                    borderRadius: BorderRadius.vertical(
                       top: Radius.circular(14),
                     ),
                   ),
@@ -526,7 +526,8 @@ class ProductCard extends StatelessWidget {
                   ),
                   const SizedBox(height: 7),
                   _LocationLine(text: product.compatibility),
-                  const SizedBox(height: 8),
+                  ProductCreatorLine(product: product, compact: compact),
+                  const SizedBox(height: 7),
                   Text(
                     formatPrice(product.price),
                     style: Theme.of(context).textTheme.titleMedium?.copyWith(
@@ -575,7 +576,7 @@ class ProductTile extends StatelessWidget {
               child: Container(
                 width: 68,
                 height: 68,
-                decoration: BoxDecoration(
+                decoration: const BoxDecoration(
                   color: DjassaTheme.backgroundSecondary,
                 ),
                 child: ProductMedia(product: product, iconSize: 32),
@@ -596,6 +597,7 @@ class ProductTile extends StatelessWidget {
                   ),
                   const SizedBox(height: 5),
                   _LocationLine(text: product.compatibility),
+                  ProductCreatorLine(product: product),
                   const SizedBox(height: 6),
                   Text(
                     formatPrice(product.price),
@@ -743,6 +745,59 @@ class _FallbackProductIcon extends StatelessWidget {
         icon,
         size: iconSize,
         color: DjassaTheme.primaryBlack.withValues(alpha: .72),
+      ),
+    );
+  }
+}
+
+class ProductCreatorLine extends StatelessWidget {
+  const ProductCreatorLine({
+    super.key,
+    required this.product,
+    this.compact = false,
+  });
+
+  final ShopProduct product;
+  final bool compact;
+
+  @override
+  Widget build(BuildContext context) {
+    if (!product.hasCreator) return const SizedBox.shrink();
+
+    final avatarUrl = product.creatorAvatarUrl?.trim();
+    final hasAvatar = avatarUrl != null && avatarUrl.isNotEmpty;
+    final radius = compact ? 9.0 : 10.0;
+
+    return Padding(
+      padding: EdgeInsets.only(top: compact ? 4 : 5),
+      child: Row(
+        children: [
+          CircleAvatar(
+            radius: radius,
+            backgroundColor: DjassaTheme.accentOrange.withValues(alpha: .12),
+            backgroundImage: hasAvatar ? NetworkImage(avatarUrl) : null,
+            child: hasAvatar
+                ? null
+                : Icon(
+                    Icons.person_rounded,
+                    size: compact ? 11 : 12,
+                    color: DjassaTheme.accentOrange,
+                  ),
+          ),
+          const SizedBox(width: 5),
+          Expanded(
+            child: Text(
+              'Par ${product.creatorName!.trim()}',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: DjassaTheme.textSecondary,
+                    fontSize: compact ? 10 : 11,
+                    fontWeight: FontWeight.w700,
+                  ),
+            ),
+          ),
+        ],
       ),
     );
   }

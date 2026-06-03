@@ -12,6 +12,7 @@ import '../../../core/utils/constants.dart';
 import '../../../domain/entities/user.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/core_providers.dart';
+import '../../widgets/shared/logout_confirmation_sheet.dart';
 import '../../widgets/vendor/vendor_scaffold.dart';
 
 /// Édition identité vendeur — séparée du profil client.
@@ -126,9 +127,14 @@ class _VendorAccountScreenState extends ConsumerState<VendorAccountScreen> {
     }
   }
 
-  Future<void> _logout() async {
-    await ref.read(authNotifierProvider.notifier).logoutUser();
-    if (mounted) context.go(AppConstants.loginRoute);
+  void _logout() {
+    showLogoutConfirmationSheet(
+      context,
+      onConfirm: () async {
+        await ref.read(authNotifierProvider.notifier).logoutUser();
+        if (mounted) context.go(AppConstants.loginRoute);
+      },
+    );
   }
 
   @override
@@ -285,7 +291,142 @@ class _VendorAccountScreenState extends ConsumerState<VendorAccountScreen> {
               ),
             ),
           ),
+          const SizedBox(height: 14),
+          _VendorProfileActions(
+            onGoToShop: () => context.go(AppConstants.vendorRoute),
+            onGoToOrders: () =>
+                context.go('${AppConstants.vendorRoute}?tab=orders'),
+            onGoToNotifications: () =>
+                context.go(AppConstants.notificationsRoute),
+            onGoToSupport: () => context.go(AppConstants.supportRoute),
+          ),
+          const SizedBox(height: 14),
+          OutlinedButton.icon(
+            onPressed: _logout,
+            icon: const Icon(Icons.logout_rounded),
+            label: const Text('Deconnexion'),
+          ),
         ],
+      ),
+    );
+  }
+}
+
+class _VendorProfileActions extends StatelessWidget {
+  const _VendorProfileActions({
+    required this.onGoToShop,
+    required this.onGoToOrders,
+    required this.onGoToNotifications,
+    required this.onGoToSupport,
+  });
+
+  final VoidCallback onGoToShop;
+  final VoidCallback onGoToOrders;
+  final VoidCallback onGoToNotifications;
+  final VoidCallback onGoToSupport;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: DjassaTheme.primaryWhite,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: DjassaTheme.borderMedium),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('Mon espace vendeur',
+              style: Theme.of(context).textTheme.titleLarge),
+          const SizedBox(height: 12),
+          _VendorShortcut(
+            icon: Icons.storefront_rounded,
+            title: 'Ma boutique',
+            subtitle: 'Configurer la boutique et publier les articles',
+            onTap: onGoToShop,
+          ),
+          _VendorShortcut(
+            icon: Icons.receipt_long_rounded,
+            title: 'Commandes recues',
+            subtitle: 'Voir les commandes liees a vos articles',
+            onTap: onGoToOrders,
+          ),
+          _VendorShortcut(
+            icon: Icons.notifications_active_rounded,
+            title: 'Notifications commande',
+            subtitle: 'Suivre les alertes importantes sur telephone',
+            onTap: onGoToNotifications,
+          ),
+          _VendorShortcut(
+            icon: Icons.support_agent_rounded,
+            title: 'Assistance vendeur',
+            subtitle: 'Aide catalogue, commande ou livraison',
+            onTap: onGoToSupport,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _VendorShortcut extends StatelessWidget {
+  const _VendorShortcut({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(18),
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: DjassaTheme.backgroundSecondary,
+            borderRadius: BorderRadius.circular(18),
+          ),
+          child: Row(
+            children: [
+              CircleAvatar(
+                backgroundColor:
+                    DjassaTheme.accentOrange.withValues(alpha: .12),
+                child: Icon(icon, color: DjassaTheme.accentOrange),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: const TextStyle(fontWeight: FontWeight.w900),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      subtitle,
+                      style: const TextStyle(
+                        color: DjassaTheme.textSecondary,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const Icon(Icons.chevron_right_rounded),
+            ],
+          ),
+        ),
       ),
     );
   }

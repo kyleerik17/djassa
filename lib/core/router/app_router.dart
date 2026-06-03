@@ -3,7 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../presentation/providers/auth_provider.dart';
-import '../../presentation/screens/admin/admin_products_screen.dart';
+import '../../presentation/screens/admin/pages/admin_products_screen.dart';
 import '../../presentation/screens/auth/login_screen.dart';
 import '../../presentation/screens/auth/register_screen.dart';
 import '../../presentation/screens/delivery/courier_orders_screen.dart';
