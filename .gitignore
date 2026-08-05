@@ -20,6 +20,7 @@ build/
 
 # Logs
 *.log
+*.hprof
 
 # Temporary files
 *.tmp

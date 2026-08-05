@@ -11,7 +11,7 @@ class SearchBarWidget extends StatelessWidget {
     return TextField(
       controller: controller,
       decoration: InputDecoration(
-        hintText: 'Rechercher un article, rayon, compatibilité...',
+        hintText: 'Rechercher un article, rayon, vendeur...',
         prefixIcon: const Icon(Icons.search_rounded),
         suffixIcon: controller.text.isEmpty
             ? null

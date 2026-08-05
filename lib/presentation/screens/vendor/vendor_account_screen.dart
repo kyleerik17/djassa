@@ -1,144 +1,38 @@
-import 'dart:typed_data';
-
+import 'package:djassa/presentation/screens/vendor/vendor_balance_adapter.dart';
+import 'package:djassa/presentation/screens/vendor/vendor_edit_profile_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:image_picker/image_picker.dart';
-import 'package:supabase_flutter/supabase_flutter.dart' hide User;
 
-import '../../../core/services/supabase_service.dart';
 import '../../../core/theme/djassa_theme.dart';
 import '../../../core/utils/constants.dart';
-import '../../../domain/entities/user.dart';
 import '../../providers/auth_provider.dart';
-import '../../providers/core_providers.dart';
 import '../../widgets/shared/logout_confirmation_sheet.dart';
 import '../../widgets/vendor/vendor_scaffold.dart';
 
-/// Édition identité vendeur — séparée du profil client.
-class VendorAccountScreen extends ConsumerStatefulWidget {
+// ---------------------------------------------------------------------------
+// Design Tokens
+// ---------------------------------------------------------------------------
+class _Radius {
+  static const double sm = 12;
+  static const double md = 16;
+  static const double lg = 20;
+}
+
+class _Gap {
+  static const double xs = 4;
+  static const double sm = 8;
+  static const double md = 12;
+  static const double lg = 16;
+  static const double xl = 24;
+}
+
+/// Écran principal du compte vendeur (Design Dashboard Moderne)
+class VendorAccountScreen extends ConsumerWidget {
   const VendorAccountScreen({super.key});
 
   @override
-  ConsumerState<VendorAccountScreen> createState() =>
-      _VendorAccountScreenState();
-}
-
-class _VendorAccountScreenState extends ConsumerState<VendorAccountScreen> {
-  final _formKey = GlobalKey<FormState>();
-  final _nameController = TextEditingController();
-  final _surnameController = TextEditingController();
-  final _phoneController = TextEditingController();
-  final _emailController = TextEditingController();
-  final _picker = ImagePicker();
-
-  Uint8List? _avatarBytes;
-  XFile? _pickedAvatar;
-  bool _isSaving = false;
-
-  @override
-  void initState() {
-    super.initState();
-    final user = ref.read(authNotifierProvider).user;
-    _nameController.text = user?.name ?? '';
-    _surnameController.text = user?.surname ?? '';
-    _phoneController.text = user?.phone ?? '';
-    _emailController.text = user?.email ?? '';
-  }
-
-  @override
-  void dispose() {
-    _nameController.dispose();
-    _surnameController.dispose();
-    _phoneController.dispose();
-    _emailController.dispose();
-    super.dispose();
-  }
-
-  Future<void> _pickAvatar() async {
-    final file = await _picker.pickImage(
-      source: ImageSource.gallery,
-      imageQuality: 82,
-      maxWidth: 900,
-    );
-    if (file == null) return;
-    final bytes = await file.readAsBytes();
-    setState(() {
-      _pickedAvatar = file;
-      _avatarBytes = bytes;
-    });
-  }
-
-  Future<String?> _uploadAvatar(User user) async {
-    if (_pickedAvatar == null || _avatarBytes == null) return user.avatarUrl;
-
-    final extension = _pickedAvatar!.name.split('.').last.toLowerCase();
-    final safeExtension =
-        ['jpg', 'jpeg', 'png', 'webp'].contains(extension) ? extension : 'jpg';
-    final path =
-        '${user.id}/${DateTime.now().millisecondsSinceEpoch}.$safeExtension';
-
-    await SupabaseService.client.storage.from('avatars').uploadBinary(
-          path,
-          _avatarBytes!,
-          fileOptions: FileOptions(
-            contentType: 'image/$safeExtension',
-            upsert: true,
-          ),
-        );
-
-    return SupabaseService.client.storage.from('avatars').getPublicUrl(path);
-  }
-
-  Future<void> _save() async {
-    if (!_formKey.currentState!.validate()) return;
-    final current = ref.read(authNotifierProvider).user;
-    if (current == null) return;
-
-    setState(() => _isSaving = true);
-    try {
-      final avatarUrl = await _uploadAvatar(current);
-      final updated = current.copyWith(
-        name: _nameController.text.trim(),
-        surname: _surnameController.text.trim(),
-        phone: _phoneController.text.trim(),
-        email: _emailController.text.trim(),
-        avatarUrl: avatarUrl,
-      );
-
-      final result = await ref.read(updateProfileProvider)(updated);
-      result.fold(
-        (failure) => throw Exception(failure.message),
-        (_) {},
-      );
-      await ref.read(authNotifierProvider.notifier).refreshUser();
-
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Compte vendeur mis à jour.')),
-      );
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Erreur : $e')),
-      );
-    } finally {
-      if (mounted) setState(() => _isSaving = false);
-    }
-  }
-
-  void _logout() {
-    showLogoutConfirmationSheet(
-      context,
-      onConfirm: () async {
-        await ref.read(authNotifierProvider.notifier).logoutUser();
-        if (mounted) context.go(AppConstants.loginRoute);
-      },
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final user = ref.watch(authNotifierProvider).user;
 
     if (user == null || !user.isVendor) {
@@ -155,214 +49,172 @@ class _VendorAccountScreenState extends ConsumerState<VendorAccountScreen> {
     return VendorScaffold(
       currentIndex: 2,
       title: 'Compte vendeur',
-      actions: [
-        IconButton(
-          tooltip: 'Déconnexion',
-          onPressed: _logout,
-          icon: const Icon(Icons.logout_rounded),
-        ),
-      ],
       body: ListView(
-        padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+        padding:
+            const EdgeInsets.symmetric(horizontal: _Gap.lg, vertical: _Gap.md),
         children: [
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(18),
-            decoration: BoxDecoration(
-              color: DjassaTheme.primaryBlack,
-              borderRadius: BorderRadius.circular(28),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Profil vendeur',
-                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                        color: DjassaTheme.primaryWhite,
-                        fontWeight: FontWeight.w900,
-                      ),
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  'Identité liée à votre boutique (table profiles).',
-                  style: TextStyle(
-                    color: DjassaTheme.primaryWhite.withValues(alpha: .68),
-                    fontSize: 13,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 18),
-          Form(
-            key: _formKey,
-            child: Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: DjassaTheme.primaryWhite,
-                borderRadius: BorderRadius.circular(24),
-                border: Border.all(color: DjassaTheme.borderMedium),
-              ),
-              child: Column(
-                children: [
-                  Center(
-                    child: Stack(
-                      children: [
-                        CircleAvatar(
-                          radius: 52,
-                          backgroundColor:
-                              DjassaTheme.accentOrange.withValues(alpha: .13),
-                          backgroundImage: _avatarBytes != null
-                              ? MemoryImage(_avatarBytes!)
-                              : (user.avatarUrl != null &&
-                                      user.avatarUrl!.isNotEmpty)
-                                  ? NetworkImage(user.avatarUrl!)
-                                      as ImageProvider
-                                  : null,
-                          child: _avatarBytes == null &&
-                                  (user.avatarUrl == null ||
-                                      user.avatarUrl!.isEmpty)
-                              ? const Icon(
-                                  Icons.storefront_rounded,
-                                  color: DjassaTheme.accentOrange,
-                                  size: 48,
-                                )
-                              : null,
-                        ),
-                        Positioned(
-                          right: 0,
-                          bottom: 0,
-                          child: IconButton.filled(
-                            style: IconButton.styleFrom(
-                              backgroundColor: DjassaTheme.accentOrange,
-                            ),
-                            onPressed: _pickAvatar,
-                            icon: const Icon(Icons.camera_alt_rounded),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-                  _Field(
-                    controller: _nameController,
-                    label: 'Nom',
-                    icon: Icons.person_outline_rounded,
-                  ),
-                  _Field(
-                    controller: _surnameController,
-                    label: 'Prénom',
-                    icon: Icons.badge_outlined,
-                  ),
-                  _Field(
-                    controller: _phoneController,
-                    label: 'Téléphone',
-                    icon: Icons.phone_outlined,
-                    keyboardType: TextInputType.phone,
-                  ),
-                  _Field(
-                    controller: _emailController,
-                    label: 'Email',
-                    icon: Icons.email_outlined,
-                    keyboardType: TextInputType.emailAddress,
-                  ),
-                  const SizedBox(height: 8),
-                  SizedBox(
-                    width: double.infinity,
-                    child: FilledButton.icon(
-                      style: FilledButton.styleFrom(
-                        backgroundColor: DjassaTheme.accentOrange,
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                      ),
-                      onPressed: _isSaving ? null : _save,
-                      icon: _isSaving
-                          ? const SizedBox(
-                              width: 18,
-                              height: 18,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
-                          : const Icon(Icons.save_rounded),
-                      label: Text(
-                        _isSaving ? 'Enregistrement…' : 'Enregistrer',
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(height: 14),
-          _VendorProfileActions(
-            onGoToShop: () => context.go(AppConstants.vendorRoute),
-            onGoToOrders: () =>
-                context.go('${AppConstants.vendorRoute}?tab=orders'),
-            onGoToNotifications: () =>
-                context.go(AppConstants.notificationsRoute),
-            onGoToSupport: () => context.go(AppConstants.supportRoute),
-          ),
-          const SizedBox(height: 14),
-          OutlinedButton.icon(
-            onPressed: _logout,
-            icon: const Icon(Icons.logout_rounded),
-            label: const Text('Deconnexion'),
-          ),
+          // 1. Header Profil (Style Carte Intégrée)
+          _ProfileHeader(user: user),
+
+          const SizedBox(height: _Gap.xl),
+
+          // 2. Section Mon Solde (Point Focal)
+          const VendorBalanceSection(),
+
+          const SizedBox(height: _Gap.xl),
+
+          // 3. Menu Actions Rapides
+          _ActionMenu(user: user),
+
+          const SizedBox(height: _Gap.xl),
+
+          // 4. Déconnexion
+          _LogoutButton(ref: ref),
+
+          const SizedBox(height: _Gap.xl), // Espace pour la bottom bar
         ],
       ),
     );
   }
 }
 
-class _VendorProfileActions extends StatelessWidget {
-  const _VendorProfileActions({
-    required this.onGoToShop,
-    required this.onGoToOrders,
-    required this.onGoToNotifications,
-    required this.onGoToSupport,
-  });
+// ─────────────────────────────────────────────────────────────────────────
+// WIDGETS UI
+// ─────────────────────────────────────────────────────────────────────────
 
-  final VoidCallback onGoToShop;
-  final VoidCallback onGoToOrders;
-  final VoidCallback onGoToNotifications;
-  final VoidCallback onGoToSupport;
+class _ProfileHeader extends StatelessWidget {
+  final dynamic user;
+  const _ProfileHeader({required this.user});
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(16),
+      width: double.infinity,
+      padding: const EdgeInsets.all(_Gap.lg),
       decoration: BoxDecoration(
         color: DjassaTheme.primaryWhite,
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: DjassaTheme.borderMedium),
+        borderRadius: BorderRadius.circular(_Radius.lg),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 15,
+            offset: const Offset(0, 5),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          // Avatar avec Hero Animation
+          Hero(
+            tag: 'vendor_avatar_${user.id}',
+            child: CircleAvatar(
+              radius: 32,
+              backgroundColor: DjassaTheme.vendorSoft,
+              backgroundImage:
+                  (user.avatarUrl != null && user.avatarUrl!.isNotEmpty)
+                      ? NetworkImage(user.avatarUrl!)
+                      : null,
+              child: (user.avatarUrl == null || user.avatarUrl!.isEmpty)
+                  ? const Icon(Icons.storefront_rounded,
+                      color: DjassaTheme.vendorPrimary, size: 32)
+                  : null,
+            ),
+          ),
+          const SizedBox(width: _Gap.md),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '${user.name ?? ''} ${user.surname ?? ''}',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w800,
+                        fontSize: 16,
+                      ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  user.email ?? 'Email non renseigné',
+                  style: TextStyle(color: Colors.grey.shade600, fontSize: 13),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
+          ),
+          // Bouton Modifier Rapide
+          IconButton(
+            icon: const Icon(Icons.edit_rounded, color: Colors.grey),
+            onPressed: () => _navigateToEditProfile(context),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _navigateToEditProfile(BuildContext context) {
+    // Transition native simple et efficace
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const VendorEditProfileScreen()),
+    );
+  }
+}
+
+class VendorBalanceSection extends ConsumerWidget {
+  const VendorBalanceSection({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final filterState = ref.watch(balanceFilterProvider);
+    final balanceAsync = ref.watch(vendorBalanceProvider(filterState));
+
+    return Container(
+      padding: const EdgeInsets.all(_Gap.lg),
+      decoration: BoxDecoration(
+        color: DjassaTheme.primaryWhite,
+        borderRadius: BorderRadius.circular(_Radius.lg),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 15,
+            offset: const Offset(0, 5),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Mon espace vendeur',
-              style: Theme.of(context).textTheme.titleLarge),
-          const SizedBox(height: 12),
-          _VendorShortcut(
-            icon: Icons.storefront_rounded,
-            title: 'Ma boutique',
-            subtitle: 'Configurer la boutique et publier les articles',
-            onTap: onGoToShop,
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'Mon Solde',
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w800,
+                    ),
+              ),
+              _PeriodFilterButton(),
+            ],
           ),
-          _VendorShortcut(
-            icon: Icons.receipt_long_rounded,
-            title: 'Commandes recues',
-            subtitle: 'Voir les commandes liees a vos articles',
-            onTap: onGoToOrders,
-          ),
-          _VendorShortcut(
-            icon: Icons.notifications_active_rounded,
-            title: 'Notifications commande',
-            subtitle: 'Suivre les alertes importantes sur telephone',
-            onTap: onGoToNotifications,
-          ),
-          _VendorShortcut(
-            icon: Icons.support_agent_rounded,
-            title: 'Assistance vendeur',
-            subtitle: 'Aide catalogue, commande ou livraison',
-            onTap: onGoToSupport,
+          const SizedBox(height: _Gap.lg),
+          balanceAsync.when(
+            data: (data) => _BalanceContent(data: data),
+            loading: () => const Padding(
+              padding: EdgeInsets.symmetric(vertical: 24.0),
+              child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+            ),
+            error: (err, stack) => Padding(
+              padding: const EdgeInsets.symmetric(vertical: 24.0),
+              child: Center(
+                child: Text(
+                  'Erreur de chargement',
+                  style: TextStyle(color: Colors.red.shade700, fontSize: 13),
+                ),
+              ),
+            ),
           ),
         ],
       ),
@@ -370,96 +222,347 @@ class _VendorProfileActions extends StatelessWidget {
   }
 }
 
-class _VendorShortcut extends StatelessWidget {
-  const _VendorShortcut({
-    required this.icon,
-    required this.title,
-    required this.subtitle,
-    required this.onTap,
-  });
+class _BalanceContent extends StatelessWidget {
+  final VendorBalanceData data;
+  const _BalanceContent({required this.data});
 
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        // Carte Principale : Solde Disponible (Dégradé Noir/Orange subtil)
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(_Gap.lg),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [DjassaTheme.vendorDark, DjassaTheme.vendorPrimary],
+            ),
+            borderRadius: BorderRadius.circular(_Radius.md),
+            boxShadow: [
+              BoxShadow(
+                color: DjassaTheme.vendorPrimary.withOpacity(0.18),
+                blurRadius: 10,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: Column(
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text('Disponible',
+                      style: TextStyle(color: Colors.white70, fontSize: 13)),
+                  Icon(Icons.account_balance_wallet_rounded,
+                      color: Colors.white.withOpacity(0.7), size: 18),
+                ],
+              ),
+              const SizedBox(height: _Gap.xs),
+              Text(
+                '${data.availableBalance.toStringAsFixed(0)} FCFA',
+                style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 28,
+                    fontWeight: FontWeight.w900),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: _Gap.md),
+
+        // Stats Secondaires
+        Row(
+          children: [
+            Expanded(
+              child: _StatCard(
+                label: 'En attente',
+                value: '${data.pendingBalance.toStringAsFixed(0)}',
+                icon: Icons.hourglass_empty_rounded,
+                color: DjassaTheme.vendorPrimary,
+              ),
+            ),
+            const SizedBox(width: _Gap.md),
+            Expanded(
+              child: _StatCard(
+                label: 'Ventes totales',
+                value: '${data.totalSales.toStringAsFixed(0)}',
+                icon: Icons.trending_up_rounded,
+                color: DjassaTheme.vendorDark,
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class _StatCard extends StatelessWidget {
+  final String label;
+  final String value;
+  final IconData icon;
+  final Color color;
+  const _StatCard(
+      {required this.label,
+      required this.value,
+      required this.icon,
+      required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(_Gap.md),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.06),
+        borderRadius: BorderRadius.circular(_Radius.sm),
+        border: Border.all(color: color.withOpacity(0.15)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(icon, size: 14, color: color),
+              const SizedBox(width: 4),
+              Text(label,
+                  style: TextStyle(
+                      color: color, fontSize: 11, fontWeight: FontWeight.w600)),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(value,
+              style: TextStyle(
+                  color: color, fontSize: 15, fontWeight: FontWeight.w800)),
+          const Text('FCFA',
+              style: TextStyle(fontSize: 10, color: Colors.grey)),
+        ],
+      ),
+    );
+  }
+}
+
+class _PeriodFilterButton extends ConsumerWidget {
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final state = ref.watch(balanceFilterProvider);
+
+    return PopupMenuButton<BalancePeriod>(
+      offset: const Offset(0, 40),
+      shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(_Radius.sm)),
+      itemBuilder: (context) => [
+        const PopupMenuItem(
+            value: BalancePeriod.today, child: Text("Aujourd'hui")),
+        const PopupMenuItem(
+            value: BalancePeriod.days7, child: Text('7 derniers jours')),
+        const PopupMenuItem(
+            value: BalancePeriod.days30, child: Text('30 derniers jours')),
+        const PopupMenuItem(
+            value: BalancePeriod.custom, child: Text('Personnalisé')),
+      ],
+      onSelected: (period) {
+        if (period == BalancePeriod.custom) {
+          _pickCustomDate(context, ref);
+        } else {
+          ref.read(balanceFilterProvider.notifier).setPeriod(period);
+        }
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          color: DjassaTheme.vendorSoft,
+          borderRadius: BorderRadius.circular(_Radius.sm),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.filter_list_rounded,
+                size: 16, color: DjassaTheme.vendorPrimary),
+            const SizedBox(width: 4),
+            Text(
+              _getPeriodLabel(state.period),
+              style: const TextStyle(
+                color: DjassaTheme.vendorPrimary,
+                fontWeight: FontWeight.w600,
+                fontSize: 12,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  String _getPeriodLabel(BalancePeriod period) {
+    switch (period) {
+      case BalancePeriod.today:
+        return "Auj.";
+      case BalancePeriod.days7:
+        return '7j';
+      case BalancePeriod.days30:
+        return '30j';
+      case BalancePeriod.custom:
+        return 'Perso.';
+    }
+  }
+
+  Future<void> _pickCustomDate(BuildContext context, WidgetRef ref) async {
+    final now = DateTime.now();
+    final start = await showDatePicker(
+      context: context,
+      initialDate: now.subtract(const Duration(days: 7)),
+      firstDate: DateTime(2020),
+      lastDate: now,
+      builder: (context, child) => Theme(
+        data: Theme.of(context).copyWith(
+          colorScheme:
+              const ColorScheme.light(primary: DjassaTheme.vendorPrimary),
+        ),
+        child: child!,
+      ),
+    );
+    if (start != null) {
+      final end = await showDatePicker(
+        context: context,
+        initialDate: now,
+        firstDate: start,
+        lastDate: now,
+        builder: (context, child) => Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme:
+                const ColorScheme.light(primary: DjassaTheme.vendorPrimary),
+          ),
+          child: child!,
+        ),
+      );
+      if (end != null) {
+        ref.read(balanceFilterProvider.notifier).setCustomPeriod(start, end);
+      }
+    }
+  }
+}
+
+class _ActionMenu extends StatelessWidget {
+  final dynamic user;
+  const _ActionMenu({required this.user});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(_Gap.lg),
+      decoration: BoxDecoration(
+        color: DjassaTheme.primaryWhite,
+        borderRadius: BorderRadius.circular(_Radius.lg),
+        boxShadow: [
+          BoxShadow(
+              color: Colors.black.withOpacity(0.04),
+              blurRadius: 10,
+              offset: const Offset(0, 4))
+        ],
+      ),
+      child: Column(
+        children: [
+          _MenuItem(
+            icon: Icons.receipt_long_rounded,
+            title: 'Historique des commandes',
+            subtitle: 'Voir toutes vos ventes passées',
+            onTap: () {}, // TODO: Navigation vers historique
+          ),
+          Divider(height: 24, color: Colors.grey.shade200),
+          _MenuItem(
+            icon: Icons.settings_rounded,
+            title: 'Paramètres de la boutique',
+            subtitle: 'Gérer les notifications et préférences',
+            onTap: () {}, // TODO: Navigation vers paramètres
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _MenuItem extends StatelessWidget {
   final IconData icon;
   final String title;
   final String subtitle;
   final VoidCallback onTap;
 
+  const _MenuItem(
+      {required this.icon,
+      required this.title,
+      required this.subtitle,
+      required this.onTap});
+
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(18),
-        onTap: onTap,
-        child: Container(
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: DjassaTheme.backgroundSecondary,
-            borderRadius: BorderRadius.circular(18),
-          ),
-          child: Row(
-            children: [
-              CircleAvatar(
-                backgroundColor:
-                    DjassaTheme.accentOrange.withValues(alpha: .12),
-                child: Icon(icon, color: DjassaTheme.accentOrange),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      title,
-                      style: const TextStyle(fontWeight: FontWeight.w900),
-                    ),
-                    const SizedBox(height: 3),
-                    Text(
-                      subtitle,
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(_Radius.sm),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: _Gap.sm),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                  color: Colors.grey.shade100,
+                  borderRadius: BorderRadius.circular(8)),
+              child: Icon(icon, size: 20, color: DjassaTheme.vendorPrimary),
+            ),
+            const SizedBox(width: _Gap.md),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(title,
                       style: const TextStyle(
-                        color: DjassaTheme.textSecondary,
-                        fontSize: 12,
-                      ),
-                    ),
-                  ],
-                ),
+                          fontWeight: FontWeight.w600, fontSize: 14)),
+                  Text(subtitle,
+                      style:
+                          TextStyle(color: Colors.grey.shade500, fontSize: 12)),
+                ],
               ),
-              const Icon(Icons.chevron_right_rounded),
-            ],
-          ),
+            ),
+            const Icon(Icons.chevron_right_rounded,
+                color: Colors.grey, size: 20),
+          ],
         ),
       ),
     );
   }
 }
 
-class _Field extends StatelessWidget {
-  const _Field({
-    required this.controller,
-    required this.label,
-    required this.icon,
-    this.keyboardType,
-  });
-
-  final TextEditingController controller;
-  final String label;
-  final IconData icon;
-  final TextInputType? keyboardType;
+class _LogoutButton extends ConsumerWidget {
+  final WidgetRef ref;
+  const _LogoutButton({required this.ref});
 
   @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 14),
-      child: TextFormField(
-        controller: controller,
-        keyboardType: keyboardType,
-        validator: (v) =>
-            v == null || v.trim().isEmpty ? 'Champ obligatoire' : null,
-        decoration: InputDecoration(
-          labelText: label,
-          prefixIcon: Icon(icon),
-          border: OutlineInputBorder(borderRadius: BorderRadius.circular(18)),
-        ),
+  Widget build(BuildContext context, WidgetRef ref) {
+    return OutlinedButton.icon(
+      style: OutlinedButton.styleFrom(
+        shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(_Radius.sm)),
+        padding: const EdgeInsets.symmetric(vertical: 14),
+        foregroundColor: const Color(0xFFE0453C),
+        side: const BorderSide(color: Color(0xFFE0453C), width: 1.5),
       ),
+      onPressed: () => _logout(context, ref),
+      icon: const Icon(Icons.logout_rounded),
+      label: const Text('Déconnexion',
+          style: TextStyle(fontWeight: FontWeight.w600)),
+    );
+  }
+
+  void _logout(BuildContext context, WidgetRef ref) {
+    showLogoutConfirmationSheet(
+      context,
+      onConfirm: () async {
+        await ref.read(authNotifierProvider.notifier).logoutUser();
+        if (context.mounted) context.go(AppConstants.loginRoute);
+      },
     );
   }
 }

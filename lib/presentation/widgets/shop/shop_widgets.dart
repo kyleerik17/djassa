@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/router/app_navigation.dart';
 import '../../../core/theme/djassa_theme.dart';
+import '../../../core/utils/constants.dart';
 import '../../screens/shop/shop_data.dart';
 import '../vendor/client_shop_gate.dart';
 
@@ -16,6 +18,9 @@ class ShopScaffold extends StatelessWidget {
     this.showBackButton = false,
     this.padding = const EdgeInsets.fromLTRB(16, 12, 16, 24),
     this.darkHeader = false,
+    this.showSellButton = true,
+    this.onRefresh,
+    this.unreadNotificationsCount,
   });
 
   final int currentIndex;
@@ -25,9 +30,27 @@ class ShopScaffold extends StatelessWidget {
   final bool showBackButton;
   final EdgeInsets padding;
   final bool darkHeader;
+  final bool showSellButton;
+
+  /// Si fourni, active le pull-to-refresh sur le contenu de l'écran.
+  /// Le SingleChildScrollView interne est déjà géré par ShopScaffold, donc
+  /// c'est ICI qu'il faut brancher le RefreshIndicator — pas dans l'écran
+  /// appelant (sinon ça crée un scrollable imbriqué avec hauteur infinie).
+  final Future<void> Function()? onRefresh;
+
+  /// Nombre de notifications non lues. Si null ou 0, aucun badge affiché.
+  /// L'écran appelant doit le fournir en lisant son propre provider de
+  /// notifications (ex: `ref.watch(unreadNotificationsCountProvider)`).
+  final int? unreadNotificationsCount;
 
   @override
   Widget build(BuildContext context) {
+    final scrollableChild = SingleChildScrollView(
+      physics: onRefresh != null ? const AlwaysScrollableScrollPhysics() : null,
+      padding: padding,
+      child: child,
+    );
+
     return ClientShopGate(
       child: Scaffold(
         backgroundColor: DjassaTheme.backgroundSecondary,
@@ -37,13 +60,13 @@ class ShopScaffold extends StatelessWidget {
               : DjassaTheme.backgroundSecondary,
           foregroundColor:
               darkHeader ? DjassaTheme.primaryWhite : DjassaTheme.textPrimary,
-          leading: showBackButton
-              ? IconButton(
-                  icon: const Icon(Icons.arrow_back_ios_new_rounded),
-                  onPressed: () =>
-                      context.canPop() ? context.pop() : context.go('/home'),
-                )
-              : null,
+   leading: showBackButton
+    ? IconButton(
+        tooltip: 'Retour',
+        icon: const Icon(Icons.arrow_back_ios_new_rounded),
+        onPressed: () => context.backOrHome(),
+      )
+    : null,
           title: Text(
             title,
             style: TextStyle(
@@ -57,53 +80,79 @@ class ShopScaffold extends StatelessWidget {
           ),
           actions: actions ??
               [
-                IconButton(
-                  tooltip: 'Recherche',
-                  icon: Icon(
-                    Icons.search_rounded,
-                    color: darkHeader
-                        ? DjassaTheme.primaryWhite
-                        : DjassaTheme.textPrimary,
-                  ),
-                  onPressed: () => context.go('/search'),
-                ),
-                IconButton(
-                  tooltip: 'Notifications',
-                  icon: Icon(
-                    Icons.notifications_none_rounded,
-                    color: darkHeader
-                        ? DjassaTheme.primaryWhite
-                        : DjassaTheme.textPrimary,
-                  ),
-                  onPressed: () => context.go('/notifications'),
+                _NotificationButton(
+                  darkHeader: darkHeader,
+                  unreadCount: unreadNotificationsCount,
                 ),
                 const SizedBox(width: 4),
               ],
         ),
         body: SafeArea(
           top: false,
-          child: SingleChildScrollView(
-            padding: padding,
-            child: child,
-          ),
+          child: onRefresh != null
+              ? RefreshIndicator(
+                  color: DjassaTheme.accentOrange,
+                  onRefresh: onRefresh!,
+                  child: scrollableChild,
+                )
+              : scrollableChild,
         ),
-        bottomNavigationBar: _ShopBottomNavigation(currentIndex: currentIndex),
+        bottomNavigationBar: _ShopBottomNavigation(
+          currentIndex: currentIndex,
+          showSellButton: showSellButton,
+        ),
       ),
     );
   }
 }
 
+class _NotificationButton extends StatelessWidget {
+  const _NotificationButton({
+    required this.darkHeader,
+    required this.unreadCount,
+  });
+
+  final bool darkHeader;
+  final int? unreadCount;
+
+  @override
+  Widget build(BuildContext context) {
+    final iconColor =
+        darkHeader ? DjassaTheme.primaryWhite : DjassaTheme.textPrimary;
+    final icon = Icon(Icons.notifications_none_rounded, color: iconColor);
+
+    return IconButton(
+      tooltip: unreadCount != null && unreadCount! > 0
+          ? '$unreadCount notification${unreadCount! > 1 ? 's' : ''} non lue${unreadCount! > 1 ? 's' : ''}'
+          : 'Notifications',
+      icon: unreadCount != null && unreadCount! > 0
+          ? Badge(
+              label: Text(unreadCount! > 9 ? '9+' : '$unreadCount'),
+              backgroundColor: DjassaTheme.accentOrange,
+              textColor: DjassaTheme.primaryWhite,
+              child: icon,
+            )
+          : icon,
+      onPressed: () => context.toNotifications(),
+    );
+  }
+}
+
 class _ShopBottomNavigation extends StatelessWidget {
-  const _ShopBottomNavigation({required this.currentIndex});
+  const _ShopBottomNavigation({
+    required this.currentIndex,
+    this.showSellButton = true,
+  });
 
   final int currentIndex;
+  final bool showSellButton;
 
   static const _routes = [
-    '/home',
-    '/search',
-    '/vendor',
-    '/favorites',
-    '/profile',
+    AppConstants.homeRoute,
+    AppConstants.searchRoute,
+    AppConstants.vendorRoute,
+    AppConstants.cartRoute,
+    AppConstants.profileRoute,
   ];
 
   @override
@@ -137,14 +186,17 @@ class _ShopBottomNavigation extends StatelessWidget {
                   selected: currentIndex == 1,
                   onTap: () => context.go(_routes[1]),
                 ),
-                _SellNavButton(
-                  selected: currentIndex == 2,
-                  onTap: () => context.go(_routes[2]),
-                ),
+                if (showSellButton)
+                  _SellNavButton(
+                    selected: currentIndex == 2,
+                    onTap: () => context.go(_routes[2]),
+                  ),
                 _NavItem(
-                  icon: Icons.favorite_border_rounded,
-                  activeIcon: Icons.favorite_rounded,
-                  label: 'Favoris',
+                  icon: Icons
+                      .shopping_cart_outlined, // Icône panier vide (normal)
+                  activeIcon:
+                      Icons.shopping_cart_rounded, // Icône panier plein (actif)
+                  label: 'Panier',
                   selected: currentIndex == 3,
                   onTap: () => context.go(_routes[3]),
                 ),
@@ -445,7 +497,7 @@ class ProductCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return InkWell(
       borderRadius: BorderRadius.circular(14),
-      onTap: () => context.go('/product/${product.id}'),
+      onTap: () => context.go(AppConstants.productLocation(product.id)),
       child: Container(
         decoration: BoxDecoration(
           color: DjassaTheme.primaryWhite,
@@ -499,7 +551,8 @@ class ProductCard extends StatelessWidget {
                           style: IconButton.styleFrom(
                             backgroundColor: DjassaTheme.primaryWhite,
                           ),
-                          onPressed: () => context.go('/favorites'),
+                          onPressed: () =>
+                              context.go(AppConstants.favoritesRoute),
                           icon: const Icon(
                             Icons.favorite_border_rounded,
                             size: 18,
@@ -561,7 +614,8 @@ class ProductTile extends StatelessWidget {
   Widget build(BuildContext context) {
     return InkWell(
       borderRadius: BorderRadius.circular(14),
-      onTap: onTap ?? () => context.go('/product/${product.id}'),
+      onTap:
+          onTap ?? () => context.go(AppConstants.productLocation(product.id)),
       child: Container(
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
@@ -810,17 +864,19 @@ class _LocationLine extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (text.trim().isEmpty) return const SizedBox.shrink();
+
     return Row(
       children: [
         const Icon(
-          Icons.location_on_rounded,
+          Icons.info_outline_rounded,
           size: 15,
           color: DjassaTheme.textSecondary,
         ),
         const SizedBox(width: 3),
         Expanded(
           child: Text(
-            text.trim().isEmpty ? 'Abidjan' : text,
+            text,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: Theme.of(context).textTheme.bodySmall,

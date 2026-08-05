@@ -5,21 +5,49 @@ import 'package:djassa/presentation/screens/admin/widgets/product_form_sheet.dar
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+// ✅ 1. Import des modèles avec préfixe pour éviter les conflits de nom (AdminCategory/AdminProduct)
+import '../../../../data/services/admin_notification_service.dart' as remote show AdminNotification;
+import '../../../../data/sources/remote/admin_service.dart' as remote;
+
+// ✅ 2. Import des providers ET du service depuis core_providers (sans préfixe)
+import '../../../providers/core_providers.dart';
+
 import '../../../../core/theme/djassa_theme.dart';
 import '../../../../data/services/admin_notification_service.dart';
-import '../../../../data/sources/remote/admin_service.dart';
-import '../../../providers/core_providers.dart';
-import '../../shop/shop_data.dart';
-
 import '../widgets/error_widgets.dart';
 
+// ── Helpers de conversion vers Map (pour Supabase) ──────────
+extension ToMapExtension on remote.AdminProduct {
+  Map<String, dynamic> toMap() => {
+        'id': id,
+        'name': name,
+        'description': description,
+        'price': price,
+        'stock': stock,
+        'category_id': categoryId,
+        'image_url': imageUrl,
+        'is_active': isActive,
+        'badge': badge,
+      };
+}
+
+extension CategoryToMapExtension on remote.AdminCategory {
+  Map<String, dynamic> toMap() => {
+        'id': id,
+        'name': name,
+        'subtitle': subtitle,
+        'icon_name': iconName,
+        'sort_order': sortOrder,
+        'is_active': isActive,
+      };
+}
 
 // ── Providers locaux notifications ────────────────────────────
 
 final notifServiceProvider = Provider((_) => AdminNotificationService());
 
 final notificationsProvider =
-    FutureProvider.autoDispose<List<AdminNotification>>((ref) async {
+    FutureProvider.autoDispose<List<remote.AdminNotification>>((ref) async {
   return ref.read(notifServiceProvider).fetchAll();
 });
 
@@ -78,16 +106,16 @@ class _AdminProductsScreenState extends ConsumerState<AdminProductsScreen>
           tabController: _tabController,
           searchController: _searchController,
           query: _query,
-          onCreateProduct: _openCreateSheet,
-          onEdit: _openEditSheet,
-          onToggleActive: _toggleActive,
-          onDelete: _deleteProduct,
-          onCreateCategory: _openCreateCategorySheet,
-          onEditCategory: _openEditCategorySheet,
-          onToggleCategoryActive: _toggleCategoryActive,
-          onDeleteCategory: _deleteCategory,
-          onSendNotif: _openNotifDialog,
-          onDeleteNotif: _deleteNotif,
+          onCreateProduct: () => _openCreateSheet(),
+          onEdit: (product) => _openEditSheet(product),
+          onToggleActive: (product) => _toggleActive(product),
+          onDelete: (product) => _deleteProduct(product),
+          onCreateCategory: () => _openCreateCategorySheet(),
+          onEditCategory: (category) => _openEditCategorySheet(category),
+          onToggleCategoryActive: (category) => _toggleCategoryActive(category),
+          onDeleteCategory: (category) => _deleteCategory(category),
+          onSendNotif: () => _openNotifDialog(),
+          onDeleteNotif: (id) => _deleteNotif(id),
         );
       },
     );
@@ -137,72 +165,43 @@ class _AdminProductsScreenState extends ConsumerState<AdminProductsScreen>
     }
   }
 
-  // ── Produits ──────────────────────────────────────────────
+  // ── Produits (SUPABASE DIRECT) ──────────────
 
   Future<void> _openCreateSheet() async {
-    final categories = await _loadCategories();
-    if (!mounted || categories == null) return;
-
-    final input = await showModalBottomSheet<AdminProductInput>(
+    final result = await showModalBottomSheet<bool>(
       context: context,
       isScrollControlled: true,
       useSafeArea: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => AdminProductFormSheet(categories: categories),
+      builder: (_) => const AdminProductFormSheet(),
     );
 
-    if (input == null) return;
-    await _runMutation(
-      successMessage: 'Article ajouté au catalogue.',
-      action: () => ref.read(adminServiceProvider).createProduct(input),
-    );
-  }
-
-  Future<void> _openEditSheet(AdminProduct product) async {
-    final categories = await _loadCategories();
-    if (!mounted || categories == null) return;
-
-    final input = await showModalBottomSheet<AdminProductInput>(
-      context: context,
-      isScrollControlled: true,
-      useSafeArea: true,
-      backgroundColor: Colors.transparent,
-      builder: (_) =>
-          AdminProductFormSheet(product: product, categories: categories),
-    );
-
-    if (input == null) return;
-    await _runMutation(
-      successMessage: 'Article mis à jour.',
-      action: () => ref
-          .read(adminServiceProvider)
-          .updateProduct(id: product.id, input: input),
-    );
-  }
-
-  Future<List<AdminCategory>?> _loadCategories() async {
-    try {
-      final categories = await ref.read(adminCategoriesProvider.future);
-      if (categories.isEmpty && mounted) {
-        _showSnack(
-          'Créez au moins un rayon dans l\'onglet Rayons avant d\'ajouter un article.',
-          isError: true,
-        );
-        return null;
-      }
-      return categories.where((c) => c.isActive).toList();
-    } catch (error) {
-      if (mounted) {
-        _showSnack('Impossible de charger les rayons: $error', isError: true);
-      }
-      return null;
+    if (result == true) {
+      ref.invalidate(adminProductsProvider);
+      ref.invalidate(productsProvider);
     }
   }
 
-  Future<void> _toggleActive(AdminProduct product) async {
+  Future<void> _openEditSheet(remote.AdminProduct product) async {
+    final result = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => AdminProductFormSheet(product: product.toMap()),
+    );
+
+    if (result == true) {
+      ref.invalidate(adminProductsProvider);
+      ref.invalidate(productsProvider);
+    }
+  }
+
+  Future<void> _toggleActive(remote.AdminProduct product) async {
     await _runMutation(
       successMessage:
           product.isActive ? 'Article archivé.' : 'Article remis en ligne.',
+      // ✅ Pas de préfixe 'remote' ici car adminServiceProvider vient de core_providers
       action: () => ref.read(adminServiceProvider).setProductActive(
             id: product.id,
             isActive: !product.isActive,
@@ -210,7 +209,7 @@ class _AdminProductsScreenState extends ConsumerState<AdminProductsScreen>
     );
   }
 
-  Future<void> _deleteProduct(AdminProduct product) async {
+  Future<void> _deleteProduct(remote.AdminProduct product) async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -236,10 +235,10 @@ class _AdminProductsScreenState extends ConsumerState<AdminProductsScreen>
     );
   }
 
-  // ── Rayons ───────────────────────────────────────────────
+  // ── Rayons (SUPABASE DIRECT) ───────────────
 
   Future<void> _openCreateCategorySheet() async {
-    final input = await showModalBottomSheet<AdminCategoryInput>(
+    final result = await showModalBottomSheet<bool>(
       context: context,
       isScrollControlled: true,
       useSafeArea: true,
@@ -247,32 +246,28 @@ class _AdminProductsScreenState extends ConsumerState<AdminProductsScreen>
       builder: (_) => const AdminCategoryFormSheet(),
     );
 
-    if (input == null) return;
-    await _runMutation(
-      successMessage: 'Rayon ajouté au catalogue.',
-      action: () => ref.read(adminServiceProvider).createCategory(input),
-    );
+    if (result == true) {
+      ref.invalidate(adminCategoriesProvider);
+      ref.invalidate(categoriesProvider);
+    }
   }
 
-  Future<void> _openEditCategorySheet(AdminCategory category) async {
-    final input = await showModalBottomSheet<AdminCategoryInput>(
+  Future<void> _openEditCategorySheet(remote.AdminCategory category) async {
+    final result = await showModalBottomSheet<bool>(
       context: context,
       isScrollControlled: true,
       useSafeArea: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => AdminCategoryFormSheet(category: category),
+      builder: (_) => AdminCategoryFormSheet(category: category.toMap()),
     );
 
-    if (input == null) return;
-    await _runMutation(
-      successMessage: 'Rayon mis à jour.',
-      action: () => ref
-          .read(adminServiceProvider)
-          .updateCategory(id: category.id, input: input),
-    );
+    if (result == true) {
+      ref.invalidate(adminCategoriesProvider);
+      ref.invalidate(categoriesProvider);
+    }
   }
 
-  Future<void> _toggleCategoryActive(AdminCategory category) async {
+  Future<void> _toggleCategoryActive(remote.AdminCategory category) async {
     await _runMutation(
       successMessage:
           category.isActive ? 'Rayon archivé.' : 'Rayon remis en ligne.',
@@ -283,7 +278,7 @@ class _AdminProductsScreenState extends ConsumerState<AdminProductsScreen>
     );
   }
 
-  Future<void> _deleteCategory(AdminCategory category) async {
+  Future<void> _deleteCategory(remote.AdminCategory category) async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(

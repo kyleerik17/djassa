@@ -11,6 +11,12 @@ const corsHeaders = {
 
 const OFFICIAL_GENIUSPAY_BASE_URL = 'https://geniuspay.ci/api/v1/merchant'
 
+// ✅ La référence vient d'un segment d'URL saisi par le client et part
+// ensuite (a) dans une requête Supabase .eq() et (b) concaténée dans l'URL
+// de l'API GeniusPay. On la valide donc explicitement avant toute
+// utilisation — même s'il s'agit d'un GET côté client.
+const REFERENCE_PATTERN = /^[A-Za-z0-9_-]{1,64}$/
+
 // @ts-ignore: Deno.env is available at runtime.
 const env = (name: string): string | undefined => Deno.env.get(name) ?? undefined
 
@@ -284,9 +290,15 @@ Deno.serve(async (req: Request): Promise<Response> => {
     const parts = url.pathname.split('/').filter(Boolean)
     const reference = parts[parts.length - 1]
 
-    if (!reference || reference === 'payment-status') {
+    // ✅ Schéma de validation explicite : présence ET format, avant que
+    // `reference` ne parte dans une requête DB ou un appel à l'API externe.
+    if (
+      !reference ||
+      reference === 'payment-status' ||
+      !REFERENCE_PATTERN.test(reference)
+    ) {
       return json({
-        error: 'Reference required in URL path',
+        error: 'Reference invalide ou manquante',
         example: '/payment-status/MTX-XXXXXXXXXX',
       }, 400)
     }

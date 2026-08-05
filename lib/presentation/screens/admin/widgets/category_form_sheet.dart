@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart'; // ✅ Import Supabase
 
 import '../../../../core/theme/djassa_theme.dart';
-import '../../../../data/sources/remote/admin_service.dart';
 import 'form_widgets.dart';
 
 class AdminCategoryFormSheet extends StatefulWidget {
@@ -10,46 +10,40 @@ class AdminCategoryFormSheet extends StatefulWidget {
     this.category,
   });
 
-  final AdminCategory? category;
+  final Map<String, dynamic>? category; // ✅ On accepte une Map venant de Supabase
 
   @override
   State<AdminCategoryFormSheet> createState() => _AdminCategoryFormSheetState();
 }
 
 class _AdminCategoryFormSheetState extends State<AdminCategoryFormSheet> {
+  final _supabase = Supabase.instance.client;
   final _formKey = GlobalKey<FormState>();
   late final TextEditingController _nameController;
   late final TextEditingController _subtitleController;
   late final TextEditingController _sortOrderController;
   String _iconName = 'category';
   bool _isActive = true;
+  bool _isSubmitting = false; // ✅ État de chargement
 
   static const _icons = [
-    'category',
-    'devices',
-    'home',
-    'checkroom',
-    'spa',
-    'sports_soccer',
-    'car_repair',
-    'settings',
-    'electric_bolt',
-    'oil',
-    'tire',
+    'category', 'devices', 'home', 'checkroom', 'spa', 'sports_soccer',
+    'car_repair', 'settings', 'electric_bolt', 'oil', 'tire',
   ];
 
   @override
   void initState() {
     super.initState();
     final category = widget.category;
-    _nameController = TextEditingController(text: category?.name ?? '');
-    _subtitleController = TextEditingController(text: category?.subtitle ?? '');
+    _nameController = TextEditingController(text: category?['name'] ?? '');
+    _subtitleController = TextEditingController(text: category?['subtitle'] ?? '');
     _sortOrderController = TextEditingController(
-      text: category == null ? '0' : '${category.sortOrder}',
+      text: category == null ? '0' : '${category['sort_order']}',
     );
-    _iconName =
-        _icons.contains(category?.iconName) ? category!.iconName : 'category';
-    _isActive = category?.isActive ?? true;
+    _iconName = _icons.contains(category?['icon_name']) 
+        ? category!['icon_name'] 
+        : 'category';
+    _isActive = category?['is_active'] ?? true;
   }
 
   @override
@@ -108,7 +102,7 @@ class _AdminCategoryFormSheetState extends State<AdminCategoryFormSheet> {
                         ),
                         const SizedBox(height: 5),
                         Text(
-                          'Ces informations organisent le catalogue côté client.',
+                          'Sauvegarde directe dans Supabase.',
                           style: Theme.of(context).textTheme.bodyMedium,
                         ),
                       ],
@@ -189,11 +183,13 @@ class _AdminCategoryFormSheetState extends State<AdminCategoryFormSheet> {
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(18),
                       ),
+                      backgroundColor: _isSubmitting ? Colors.grey : DjassaTheme.accentOrange,
                     ),
-                    onPressed: _submit,
-                    icon: Icon(
-                        isEditing ? Icons.save_rounded : Icons.add_rounded),
-                    label: Text(isEditing ? 'Enregistrer' : 'Ajouter le rayon'),
+                    onPressed: _isSubmitting ? null : _submitToSupabase,
+                    icon: _isSubmitting 
+                      ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                      : Icon(isEditing ? Icons.save_rounded : Icons.add_rounded),
+                    label: Text(_isSubmitting ? 'Sauvegarde...' : (isEditing ? 'Enregistrer' : 'Ajouter le rayon')),
                   ),
                 ),
               ],
@@ -204,14 +200,48 @@ class _AdminCategoryFormSheetState extends State<AdminCategoryFormSheet> {
     );
   }
 
-  void _submit() {
+  Future<void> _submitToSupabase() async {
     if (!_formKey.currentState!.validate()) return;
-    Navigator.of(context).pop(AdminCategoryInput(
-      name: _nameController.text,
-      subtitle: _subtitleController.text,
-      iconName: _iconName,
-      sortOrder: int.parse(_sortOrderController.text),
-      isActive: _isActive,
-    ));
+
+    setState(() => _isSubmitting = true);
+
+    try {
+      final payload = {
+        'name': _nameController.text.trim(),
+        'subtitle': _subtitleController.text.trim(),
+        'icon_name': _iconName,
+        'sort_order': int.parse(_sortOrderController.text),
+        'is_active': _isActive,
+        'slug': _nameController.text.trim().toLowerCase().replaceAll(' ', '-'),
+        'updated_at': DateTime.now().toIso8601String(),
+      };
+
+      if (widget.category != null) {
+        // UPDATE
+        await _supabase
+            .from('categories')
+            .update(payload)
+            .eq('id', widget.category!['id']);
+      } else {
+        // INSERT
+        payload['created_at'] = DateTime.now().toIso8601String();
+        await _supabase.from('categories').insert(payload);
+      }
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(widget.category != null ? 'Rayon mis à jour !' : 'Rayon créé !'), backgroundColor: Colors.green)
+        );
+        Navigator.of(context).pop(true); // Retourne true pour rafraîchir la liste
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Erreur: $e'), backgroundColor: Colors.red)
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isSubmitting = false);
+    }
   }
 }

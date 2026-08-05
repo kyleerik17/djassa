@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/theme/djassa_theme.dart';
+import '../../../core/utils/constants.dart';
 import '../../../data/services/order_chat_service.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/core_providers.dart';
@@ -89,7 +90,7 @@ class _OrderChatScreenState extends ConsumerState<OrderChatScreen> {
             if (context.canPop()) {
               context.pop();
             } else {
-              context.go('/orders');
+              context.go(AppConstants.ordersRoute);
             }
           },
         ),

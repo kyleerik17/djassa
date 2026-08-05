@@ -55,7 +55,7 @@ class AdminProductCard extends StatelessWidget {
                       label: product.categoryName,
                       color: DjassaTheme.primaryBlack),
                   ChipWidget(
-                      label: product.isActive ? 'En ligne' : 'Archivé',
+                      label: product.isActive ? 'En ligne' : 'ArchivÃ©',
                       color: product.isActive
                           ? DjassaTheme.accentGreen
                           : Colors.red),
@@ -74,7 +74,7 @@ class AdminProductCard extends StatelessWidget {
                 const SizedBox(height: 5),
                 Text(
                     product.compatibility.isEmpty
-                        ? 'Compatibilité non renseignée'
+                        ? 'Détails produit non renseignés'
                         : product.compatibility,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
@@ -86,7 +86,7 @@ class AdminProductCard extends StatelessWidget {
                           color: DjassaTheme.accentOrange,
                           fontWeight: FontWeight.w900)),
                   Text('${product.stock} en stock'),
-                  Text('★ ${product.rating.toStringAsFixed(1)}'),
+                  Text('â˜… ${product.rating.toStringAsFixed(1)}'),
                 ]),
                 if (product.creatorName != null) ...[
                   const SizedBox(height: 10),
@@ -184,7 +184,7 @@ class AdminProductCard extends StatelessWidget {
       case 'tire':
         return Icons.trip_origin;
       default:
-        return Icons.directions_car;
+        return Icons.shopping_bag_rounded;
     }
   }
 }

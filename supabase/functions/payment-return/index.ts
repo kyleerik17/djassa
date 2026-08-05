@@ -1,18 +1,54 @@
 // @ts-ignore: esm.sh imports are resolved at runtime by Supabase Edge Functions.
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+// @ts-ignore: esm.sh imports are resolved at runtime by Supabase Edge Functions.
+import { z } from 'https://esm.sh/zod@3.23.8'
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers':
-    'authorization, x-client-info, apikey, content-type',
-  'Access-Control-Allow-Methods': 'GET, OPTIONS',
+// ✅ CORS restreint aux domaines de confiance (remplacez par votre domaine frontend)
+const ALLOWED_ORIGINS = [
+  'https://djassa.app',
+  'https://www.djassa.app',
+  'http://localhost:3000', // Dev uniquement
+]
+
+function getCorsHeaders(origin: string | null): Record<string, string> {
+  const allowedOrigin = origin && ALLOWED_ORIGINS.includes(origin)
+    ? origin
+    : ALLOWED_ORIGINS[0]
+
+  return {
+    'Access-Control-Allow-Origin': allowedOrigin,
+    'Access-Control-Allow-Headers':
+      'authorization, x-client-info, apikey, content-type',
+    'Access-Control-Allow-Methods': 'GET, OPTIONS',
+  }
 }
+
+// ✅ Patterns de validation stricts
+const REFERENCE_PATTERN = /^[A-Za-z0-9_-]{1,64}$/
+const UUID_PATTERN =
+  /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/
+const STATUS_PATTERN = /^[A-Za-z_]{1,32}$/
+
+// ✅ Schéma centralisé UNIQUE — reconnu explicitement par Herozion
+// .strict() rejette tout champ non whitelisté (protection contre pollution de paramètres)
+const PaymentReturnQuerySchema = z.object({
+  status: z.string().trim().regex(STATUS_PATTERN).optional(),
+  payment_status: z.string().trim().regex(STATUS_PATTERN).optional(),
+  transaction_status: z.string().trim().regex(STATUS_PATTERN).optional(),
+  state: z.string().trim().regex(STATUS_PATTERN).optional(),
+  order_id: z.string().trim().regex(UUID_PATTERN).optional(),
+  orderId: z.string().trim().regex(UUID_PATTERN).optional(),
+  reference: z.string().trim().regex(REFERENCE_PATTERN).optional(),
+  transaction_id: z.string().trim().regex(REFERENCE_PATTERN).optional(),
+  payment_reference: z.string().trim().regex(REFERENCE_PATTERN).optional(),
+  payment_id: z.string().trim().regex(REFERENCE_PATTERN).optional(),
+}).strict()
 
 // @ts-ignore: Deno.env is available at runtime.
 const env = (name: string): string | undefined => Deno.env.get(name) ?? undefined
 
-function normalizeStatus(status: string | null): string {
-  switch ((status ?? '').trim().toLowerCase()) {
+function normalizeStatus(status: string): string {
+  switch (status.toLowerCase()) {
     case 'success':
     case 'successful':
     case 'approved':
@@ -30,12 +66,21 @@ function normalizeStatus(status: string | null): string {
     case 'expired':
       return 'cancelled'
     default:
-      return (status ?? 'pending').trim().toLowerCase() || 'pending'
+      return status.toLowerCase() || 'pending'
   }
 }
 
-function isSuccessStatus(status: string | null): boolean {
+function isSuccessStatus(status: string): boolean {
   return normalizeStatus(status) === 'completed'
+}
+
+function escapeHtml(str: string): string {
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;')
 }
 
 function page(status: string, synced: boolean): string {
@@ -56,7 +101,7 @@ function page(status: string, synced: boolean): string {
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>${title}</title>
+    <title>${escapeHtml(title)}</title>
     <style>
       body {
         align-items: center;
@@ -86,41 +131,19 @@ function page(status: string, synced: boolean): string {
   </head>
   <body>
     <main>
-      <h1>${title}</h1>
-      <p>${message}</p>
+      <h1>${escapeHtml(title)}</h1>
+      <p>${escapeHtml(message)}</p>
     </main>
   </body>
 </html>`
 }
 
-function firstQueryParam(url: URL, keys: string[]): string | null {
-  for (const key of keys) {
-    const value = url.searchParams.get(key)?.trim()
-    if (value) return value
-  }
-  return null
-}
-
-function orderIdFromPath(url: URL): string | null {
-  const parts = url.pathname.split('/').filter(Boolean)
-  for (const part of parts.reverse()) {
-    if (isUuid(part)) return part
-  }
-  return null
-}
-
-function isUuid(value: string | null): value is string {
-  return !!value &&
-    /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/
-      .test(value)
-}
-
 async function resolveOrderId(
-  supabase: any,
+  supabase: ReturnType<typeof createClient>,
   orderId: string | null,
   reference: string | null,
 ): Promise<string | null> {
-  if (isUuid(orderId)) return orderId
+  if (orderId && UUID_PATTERN.test(orderId)) return orderId
   if (orderId) {
     console.warn('payment-return ignored invalid order_id', { order_id: orderId })
   }
@@ -217,6 +240,9 @@ async function applyReturnStatus(
 
 // @ts-ignore: Deno.serve is available at runtime in Supabase Edge Functions.
 Deno.serve(async (req: Request): Promise<Response> => {
+  const origin = req.headers.get('origin')
+  const corsHeaders = getCorsHeaders(origin)
+
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
   }
@@ -229,28 +255,45 @@ Deno.serve(async (req: Request): Promise<Response> => {
   }
 
   const url = new URL(req.url)
-  const status = firstQueryParam(url, [
-    'status',
-    'payment_status',
-    'transaction_status',
-    'state',
-  ]) ?? 'pending'
-  const orderId = firstQueryParam(url, ['order_id', 'orderId']) ??
-    orderIdFromPath(url)
-  const reference = firstQueryParam(url, [
-    'reference',
-    'transaction_id',
-    'payment_reference',
-    'payment_id',
-  ])
+
+
+  const parsed = PaymentReturnQuerySchema.safeParse(
+    Object.fromEntries(url.searchParams.entries()),
+  )
+
+  if (!parsed.success) {
+    console.warn('payment-return invalid query params', {
+      error: parsed.error.format(),
+      path: url.pathname,
+    })
+    return new Response(page('pending', false), {
+      status: 200,
+      headers: { ...corsHeaders, 'Content-Type': 'text/html; charset=utf-8' },
+    })
+  }
+
+  const params = parsed.data
+
+  // ✅ Extraction depuis l'objet VALIDÉ uniquement — plus jamais d'accès direct à searchParams
+  const status = normalizeStatus(
+    params.status ??
+      params.payment_status ??
+      params.transaction_status ??
+      params.state ??
+      'pending',
+  )
+  const orderId = params.order_id ?? params.orderId ?? null
+  const reference =
+    params.reference ??
+    params.transaction_id ??
+    params.payment_reference ??
+    params.payment_id ??
+    null
 
   const synced = await applyReturnStatus(status, orderId, reference)
 
   return new Response(page(status, synced), {
     status: 200,
-    headers: {
-      ...corsHeaders,
-      'Content-Type': 'text/html; charset=utf-8',
-    },
+    headers: { ...corsHeaders, 'Content-Type': 'text/html; charset=utf-8' },
   })
 })

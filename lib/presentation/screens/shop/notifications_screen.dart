@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/services/supabase_service.dart';
 import '../../../core/theme/djassa_theme.dart';
+import '../../../core/utils/constants.dart';
 import '../../widgets/shop/shop_widgets.dart';
 import '../../../data/services/admin_notification_service.dart';
 
@@ -58,6 +59,7 @@ class NotificationsScreen extends ConsumerWidget {
       currentIndex: 0,
       title: 'Notifications',
       showBackButton: true,
+      showSellButton: false,
       child: async.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, _) => Center(child: Text('Erreur : $e')),
@@ -73,7 +75,7 @@ class NotificationsScreen extends ConsumerWidget {
                     style: TextStyle(color: Colors.grey.shade500)),
                 const SizedBox(height: 24),
                 TextButton(
-                  onPressed: () => context.go('/home'),
+                  onPressed: () => context.go(AppConstants.homeRoute),
                   child: const Text('Retour à l\'accueil'),
                 ),
               ],
@@ -134,12 +136,7 @@ class NotificationsScreen extends ConsumerWidget {
                     ),
                   ),
                 ),
-              const SizedBox(height: 12),
-              TextButton(
-                onPressed: () => context.go('/home'),
-                child: const Text('Retour à l\'accueil'),
-              ),
-              const SizedBox(height: 88),
+             
             ],
           );
         },

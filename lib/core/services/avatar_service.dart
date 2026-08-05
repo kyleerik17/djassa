@@ -1,7 +1,6 @@
 import 'dart:io';
 
 import 'package:image_picker/image_picker.dart';
-import 'package:path/path.dart' as p;
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 /// Service de gestion de la photo de profil (avatar).
@@ -39,7 +38,7 @@ class AvatarService {
     }
 
     // Chemin : <uid>/avatar.<ext>  → on écrase l'ancienne photo
-    final ext = p.extension(file.path).toLowerCase().replaceAll('.', '');
+    final ext = _fileExtension(file.path);
     final safeExt = (ext.isEmpty ? 'jpg' : ext);
     final objectPath = '${user.id}/avatar.$safeExt';
 
@@ -71,6 +70,14 @@ class AvatarService {
     final file = await pickImage(source: source);
     if (file == null) return null;
     return uploadAvatar(file);
+  }
+
+  String _fileExtension(String path) {
+    final lastSeparator = path.lastIndexOf(RegExp(r'[\\/]'));
+    final fileName = lastSeparator == -1 ? path : path.substring(lastSeparator + 1);
+    final dot = fileName.lastIndexOf('.');
+    if (dot == -1 || dot == fileName.length - 1) return '';
+    return fileName.substring(dot + 1).toLowerCase();
   }
 
   /// Supprime l'avatar courant (Storage + colonne profile).

@@ -1,3 +1,4 @@
+﻿import 'package:djassa/presentation/screens/auth/ForgotPasswordScreen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -11,6 +12,7 @@ import '../../presentation/screens/home/home_screen.dart';
 import '../../presentation/screens/onboarding/onboarding_screen.dart';
 import '../../presentation/screens/shop/cart_screen.dart';
 import '../../presentation/screens/shop/categories_screen.dart';
+import '../../presentation/screens/shop/category_detail_screen.dart';
 import '../../presentation/screens/shop/checkout_screen.dart';
 import '../../presentation/screens/shop/edit_profile_screen.dart';
 import '../../presentation/screens/shop/favorites_screen.dart';
@@ -19,7 +21,7 @@ import '../../presentation/screens/shop/order_chat_screen.dart';
 import '../../presentation/screens/shop/orders_screen.dart';
 import '../../presentation/screens/shop/payment_screen.dart';
 import '../../presentation/screens/shop/product_detail_screen.dart';
-import '../../presentation/screens/shop/profile_screen.dart';
+import '../../presentation/screens/profile/pages/profile_screen.dart';
 import '../../presentation/screens/shop/search_screen.dart';
 import '../../presentation/screens/shop/support_screen.dart';
 import '../../presentation/screens/splash/splash_screen.dart';
@@ -96,6 +98,12 @@ class AppRouter {
           child: const LoginScreen(),
         ),
         _route(
+          path: AppConstants.forgotPasswordRoute,
+          name: 'forgot-password',
+          child: const ForgotPasswordScreen(),
+        ),
+
+        _route(
           path: AppConstants.onboardingRoute,
           name: 'onboarding',
           child: const OnboardingScreen(),
@@ -114,6 +122,16 @@ class AppRouter {
           path: AppConstants.categoriesRoute,
           name: 'categories',
           child: const CategoriesScreen(),
+        ),
+        GoRoute(
+          path: AppConstants.categoryDetailRoute,
+          name: 'category-detail',
+          pageBuilder: (context, state) => _page(
+            state,
+            CategoryDetailScreen(
+              categoryName: state.pathParameters['name'] ?? '',
+            ),
+          ),
         ),
         GoRoute(
           path: AppConstants.searchRoute,
@@ -224,6 +242,16 @@ class AppRouter {
           name: 'vendor-account',
           child: const VendorAccountScreen(),
         ),
+        GoRoute(
+          path: AppConstants.vendorOrderDetailsRoute,
+          name: 'vendor-order-details',
+          pageBuilder: (context, state) => _page(
+            state,
+            VendorOrderDetailsScreen(
+              orderId: state.pathParameters['orderId'] ?? '',
+            ),
+          ),
+        ),
       ],
       errorBuilder: (context, state) => Scaffold(
         backgroundColor: DjassaTheme.backgroundSecondary,
@@ -240,12 +268,12 @@ class AppRouter {
                 ),
                 const SizedBox(height: 18),
                 Text(
-                  'Page non trouvée',
+                  'Page non trouvÃ©e',
                   style: Theme.of(context).textTheme.headlineSmall,
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  'Le chemin ${state.uri.path} n’existe pas.',
+                  'Le chemin ${state.uri.path} nâ€™existe pas.',
                   textAlign: TextAlign.center,
                   style: Theme.of(context).textTheme.bodyMedium,
                 ),
@@ -286,8 +314,8 @@ class AppRouter {
       key: state.pageKey,
       name: state.name,
       arguments: state.extra,
-      transitionDuration: const Duration(milliseconds: 280),
-      reverseTransitionDuration: const Duration(milliseconds: 220),
+      transitionDuration: const Duration(milliseconds: 320),
+      reverseTransitionDuration: const Duration(milliseconds: 240),
       child: child,
       transitionsBuilder: (context, animation, secondaryAnimation, child) {
         final curvedAnimation = CurvedAnimation(
@@ -295,18 +323,53 @@ class AppRouter {
           curve: Curves.easeOutCubic,
           reverseCurve: Curves.easeInCubic,
         );
+        final secondaryCurve = CurvedAnimation(
+          parent: secondaryAnimation,
+          curve: Curves.easeOutCubic,
+          reverseCurve: Curves.easeInCubic,
+        );
 
         return FadeTransition(
-          opacity: curvedAnimation,
+          opacity: Tween<double>(begin: 0, end: 1).animate(curvedAnimation),
           child: SlideTransition(
             position: Tween<Offset>(
-              begin: const Offset(.04, .02),
+              begin: _initialOffsetFor(state.uri.path),
               end: Offset.zero,
             ).animate(curvedAnimation),
-            child: child,
+            child: ScaleTransition(
+              scale: Tween<double>(begin: .985, end: 1).animate(
+                curvedAnimation,
+              ),
+              child: SlideTransition(
+                position: Tween<Offset>(
+                  begin: Offset.zero,
+                  end: const Offset(-.015, 0),
+                ).animate(secondaryCurve),
+                child: child,
+              ),
+            ),
           ),
         );
       },
     );
+  }
+
+  static Offset _initialOffsetFor(String path) {
+    if (path == AppConstants.splashRoute ||
+        path == AppConstants.loginRoute ||
+        path == AppConstants.onboardingRoute) {
+      return const Offset(0, .035);
+    }
+    if (path == AppConstants.cartRoute ||
+        path == AppConstants.checkoutRoute ||
+        path.startsWith('/payment/')) {
+      return const Offset(.06, 0);
+    }
+    if (path == AppConstants.vendorRoute ||
+        path == AppConstants.courierRoute ||
+        path == AppConstants.adminRoute) {
+      return const Offset(0, .045);
+    }
+    return const Offset(.035, .01);
   }
 }

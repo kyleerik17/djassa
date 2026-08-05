@@ -1,10 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
 
+import '../../../core/router/app_navigation.dart';
 import '../../../core/theme/djassa_theme.dart';
-import '../../../core/utils/constants.dart';
 
-/// Navigation bas de page — espace vendeur uniquement.
 class VendorScaffold extends StatelessWidget {
   const VendorScaffold({
     super.key,
@@ -31,16 +29,18 @@ class VendorScaffold extends StatelessWidget {
       ),
       body: SafeArea(top: false, child: body),
       bottomNavigationBar: NavigationBar(
+        backgroundColor: DjassaTheme.primaryWhite,
+        indicatorColor: DjassaTheme.vendorSoft,
         selectedIndex: currentIndex,
         onDestinationSelected: (index) {
           if (index == currentIndex) return;
           switch (index) {
             case 0:
-              context.go(AppConstants.vendorRoute);
+              context.toVendor();
             case 1:
-              context.go('${AppConstants.vendorRoute}?tab=orders');
+              context.toVendorOrders();
             case 2:
-              context.go(AppConstants.vendorAccountRoute);
+              context.toVendorAccount();
           }
         },
         destinations: const [

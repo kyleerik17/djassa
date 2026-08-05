@@ -11,6 +11,16 @@ class DjassaTheme {
   static const Color accentOrange = Color(0xFFFF4B0B);
   static const Color accentGreen = Color(0xFF4CAF50);
 
+  // Couleurs par profil
+  static const Color clientPrimary = Color(0xFFFF4B0B);
+  static const Color clientSoft = Color(0xFFFFEFE8);
+  static const Color vendorPrimary = Color(0xFF5B3FE8);
+  static const Color vendorDark = Color(0xFF1B1642);
+  static const Color vendorSoft = Color(0xFFF0EDFF);
+  static const Color courierPrimary = Color(0xFF00A676);
+  static const Color courierDark = Color(0xFF083C35);
+  static const Color courierSoft = Color(0xFFE8F8F2);
+
   // Couleurs de texte
   static const Color textPrimary = Color(0xFF1A1A1A);
   static const Color textSecondary = Color(0xFF737373);
@@ -224,7 +234,6 @@ class DjassaTheme {
         ),
       ),
       cardTheme: CardThemeData(
-        // <-- Correction : Utiliser CardThemeData
         color: backgroundPrimary,
         elevation: 0,
         shape: RoundedRectangleBorder(

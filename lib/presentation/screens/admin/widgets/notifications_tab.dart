@@ -5,7 +5,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/theme/djassa_theme.dart';
 import '../../../../data/services/admin_notification_service.dart';
 
-import '../widgets/shared_widgets.dart';
 
 class NotificationsTab extends ConsumerWidget {
   const NotificationsTab({

@@ -17,51 +17,72 @@ class OnboardingScreen extends ConsumerStatefulWidget {
 class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
   final PageController _controller = PageController();
   int _index = 0;
+  bool _isAnimating = false;
 
-  static const _pages = [
+  // Données optimisées avec des couleurs cohérentes avec la marque
+  static const List<_OnboardingPageData> _pages = [
     _OnboardingPageData(
+      // Image générique e-commerce propre
+      imageUrl: 'https://images.unsplash.com/photo-1607082348824-0a96f2a4b9da?w=800&q=80',
+      badge: 'Catalogue Illimité',
+      title: 'Tout ce dont vous avez besoin',
+      subtitle: 'Mode, high-tech, maison... Explorez des milliers de produits vérifiés et sélectionnés pour vous.',
       icon: Icons.shopping_bag_rounded,
-      badge: '1 min pour d?marrer',
-      title: 'Commandez la bonne pi?ce sans stress',
-      subtitle:
-          'Recherchez, comparez et ajoutez vos articles auto au panier avec un parcours clair.',
-      color: DjassaTheme.accentOrange,
-      highlights: ['Catalogue fiable', 'Prix visible', 'Panier rapide'],
+      accentColor: DjassaTheme.accentOrange,
     ),
     _OnboardingPageData(
+      // Image livraison/professionnel
+      imageUrl: 'https://images.unsplash.com/photo-1556740758-90de374c12ad?w=800&q=80',
+      badge: 'Simplicité Absolue',
+      title: 'Commandez en un clin d\'œil',
+      subtitle: 'Vos adresses et paiements sont sauvegardés. Plus jamais de formulaires interminables à remplir.',
+      icon: Icons.flash_on_rounded,
+      accentColor: Colors.blueAccent,
+    ),
+    _OnboardingPageData(
+      // Image qualité/colis
+      imageUrl: 'https://images.unsplash.com/photo-1580674285054-bed31e145f59?w=800&q=80',
+      badge: 'Qualité Garantie',
+      title: 'Emballé avec soin',
+      subtitle: 'Chaque commande passe par un contrôle rigoureux avant d\'être confiée à nos livreurs partenaires.',
+      icon: Icons.verified_user_rounded,
+      accentColor: Colors.green,
+    ),
+    _OnboardingPageData(
+      // Image tracking/map
+      imageUrl: 'https://images.unsplash.com/photo-1566576912321-d58ddd7a6088?w=800&q=80',
+      badge: 'Suivi en Temps Réel',
+      title: 'Votre colis, sous vos yeux',
+      subtitle: 'Suivez votre livreur sur la carte en direct. Recevez des notifications à chaque étape clé.',
       icon: Icons.location_on_rounded,
-      badge: 'Adresse r?utilisable',
-      title: 'D?finissez votre point de livraison',
-      subtitle:
-          'Choisissez la ville et la commune, puis Djassa garde votre adresse pour les prochaines commandes.',
-      color: Colors.green,
-      highlights: ['Ville', 'Commune', 'GPS client'],
-    ),
-    _OnboardingPageData(
-      icon: Icons.inventory_2_rounded,
-      badge: 'Apr?s paiement',
-      title: 'Vos articles sont pr?par?s puis remis au livreur',
-      subtitle:
-          'L??quipe v?rifie la commande, rassemble les pi?ces, emballe le colis et le confie au livreur.',
-      color: Colors.deepPurple,
-      highlights: ['V?rification', 'Pr?paration', 'Remise colis'],
-    ),
-    _OnboardingPageData(
-      icon: Icons.map_rounded,
-      badge: 'Suivi temps r?el',
-      title: 'Suivez la livraison sur une vraie carte',
-      subtitle:
-          'Votre GPS et celui du livreur se synchronisent sur OpenStreetMap pendant la livraison.',
-      color: Colors.blue,
-      highlights: ['OpenStreetMap', 'GPS live', 'Livreur + client'],
+      accentColor: Colors.deepPurple,
     ),
   ];
 
   Future<void> _finish() async {
-    await ref
-        .read(sharedPreferencesProvider)
-        .setBool(AppConstants.onboardingCompleteKey, true);
-    if (mounted) context.go(AppConstants.loginRoute);
+    if (_isAnimating) return;
+    _isAnimating = true;
+    
+    try {
+      await ref.read(sharedPreferencesProvider).setBool(
+            AppConstants.onboardingCompleteKey, 
+            true,
+          );
+      if (mounted) context.go(AppConstants.loginRoute);
+    } catch (e) {
+      _isAnimating = false;
+    }
+  }
+
+  void _nextPage() {
+    if (_index < _pages.length - 1) {
+      _controller.nextPage(
+        duration: const Duration(milliseconds: 400),
+        curve: Curves.easeOutCubic,
+      );
+    } else {
+      _finish();
+    }
   }
 
   @override
@@ -73,101 +94,140 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
   @override
   Widget build(BuildContext context) {
     final isLast = _index == _pages.length - 1;
+    final theme = Theme.of(context);
 
     return Scaffold(
       backgroundColor: DjassaTheme.backgroundSecondary,
       body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 18, 20, 24),
-          child: Column(
-            children: [
-              Row(
+        child: Column(
+          children: [
+            // --- HEADER ---
+            Padding(
+              padding: const EdgeInsets.fromLTRB(24, 16, 24, 0),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                  // Logo + Tagline
+                  Row(
                     children: [
                       Image.asset(
                         AppConstants.logoAsset,
-                        width: 118,
-                        height: 38,
+                        width: 100,
+                        height: 32,
                         fit: BoxFit.contain,
                       ),
+                      const SizedBox(width: 8),
+                      Container(
+                        width: 1,
+                        height: 20,
+                        color: Colors.grey.shade300,
+                      ),
+                      const SizedBox(width: 8),
                       Text(
-                        'Votre assistant livraison auto',
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              color: DjassaTheme.primaryBlack
-                                  .withValues(alpha: .55),
-                              fontWeight: FontWeight.w700,
-                            ),
+                        'Bienvenue',
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          fontWeight: FontWeight.w600,
+                          color: Colors.grey.shade600,
+                        ),
                       ),
                     ],
-                  ),
-                  const Spacer(),
+                  ).animate().fadeIn(duration: 600.ms),
+                  
+                  // Bouton Passer
                   TextButton(
                     onPressed: _finish,
-                    child: const Text('Passer'),
-                  ),
+                    style: TextButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    ),
+                    child: Text(
+                      'Passer',
+                      style: TextStyle(
+                        color: Colors.grey.shade600,
+                        fontWeight: FontWeight.w600,
+                        fontSize: 14,
+                      ),
+                    ),
+                  ).animate().fadeIn(duration: 600.ms, delay: 200.ms),
                 ],
               ),
-              const SizedBox(height: 18),
-              Expanded(
-                child: PageView.builder(
-                  controller: _controller,
-                  itemCount: _pages.length,
-                  onPageChanged: (value) => setState(() => _index = value),
-                  itemBuilder: (context, index) {
-                    return _OnboardingPage(data: _pages[index]);
-                  },
-                ),
+            ),
+
+            const SizedBox(height: 24),
+
+            // --- CONTENU PRINCIPAL (PAGEVIEW) ---
+            Expanded(
+              child: PageView.builder(
+                controller: _controller,
+                itemCount: _pages.length,
+                onPageChanged: (value) => setState(() => _index = value),
+                itemBuilder: (context, index) {
+                  return _OnboardingPage(
+                    data: _pages[index],
+                    isActive: _index == index,
+                  );
+                },
               ),
-              const SizedBox(height: 12),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: List.generate(
-                  _pages.length,
-                  (i) => AnimatedContainer(
-                    duration: const Duration(milliseconds: 260),
-                    width: _index == i ? 30 : 9,
-                    height: 9,
-                    margin: const EdgeInsets.symmetric(horizontal: 4),
-                    decoration: BoxDecoration(
-                      color: _index == i
-                          ? DjassaTheme.accentOrange
-                          : DjassaTheme.borderMedium,
-                      borderRadius: BorderRadius.circular(999),
+            ),
+
+            // --- FOOTER CONTROLS ---
+            Padding(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                children: [
+                  // Indicateurs (Dots)
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: List.generate(
+                      _pages.length,
+                      (i) => AnimatedContainer(
+                        duration: const Duration(milliseconds: 300),
+                        width: _index == i ? 24 : 8,
+                        height: 8,
+                        margin: const EdgeInsets.symmetric(horizontal: 4),
+                        decoration: BoxDecoration(
+                          color: _index == i
+                              ? DjassaTheme.accentOrange
+                              : Colors.grey.shade300,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
                     ),
                   ),
-                ),
-              ),
-              const SizedBox(height: 22),
-              SizedBox(
-                width: double.infinity,
-                child: FilledButton.icon(
-                  style: FilledButton.styleFrom(
-                    backgroundColor: DjassaTheme.primaryBlack,
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(18),
+                  
+                  const SizedBox(height: 24),
+
+                  // Bouton d'action principal
+                  SizedBox(
+                    width: double.infinity,
+                    height: 56,
+                    child: FilledButton.icon(
+                      style: FilledButton.styleFrom(
+                        backgroundColor: DjassaTheme.primaryBlack,
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        elevation: 4,
+                        shadowColor: DjassaTheme.accentOrange.withOpacity(0.3),
+                      ),
+                      onPressed: _nextPage,
+                      icon: Icon(
+                        isLast ? Icons.check_rounded : Icons.arrow_forward_rounded,
+                        size: 20,
+                      ),
+                      label: Text(
+                        isLast ? 'Commencer l\'aventure' : 'Continuer',
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
                     ),
-                  ),
-                  onPressed: () {
-                    if (isLast) {
-                      _finish();
-                      return;
-                    }
-                    _controller.nextPage(
-                      duration: const Duration(milliseconds: 360),
-                      curve: Curves.easeOutCubic,
-                    );
-                  },
-                  icon: Icon(
-                    isLast ? Icons.check_rounded : Icons.arrow_forward_rounded,
-                  ),
-                  label: Text(isLast ? 'Commencer Djassa' : 'Continuer'),
-                ),
+                  ).animate().scale(delay: 400.ms, duration: 400.ms, curve: Curves.elasticOut),
+                ],
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
@@ -175,158 +235,177 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
 }
 
 class _OnboardingPage extends StatelessWidget {
-  const _OnboardingPage({required this.data});
+  const _OnboardingPage({required this.data, required this.isActive});
 
   final _OnboardingPageData data;
+  final bool isActive;
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: [
-        Expanded(
-          child: Container(
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          // --- CARD VISUELLE ---
+          Container(
             width: double.infinity,
-            padding: const EdgeInsets.all(24),
+            height: 320, // Hauteur fixe pour la stabilité
             decoration: BoxDecoration(
-              color: DjassaTheme.primaryBlack,
-              borderRadius: BorderRadius.circular(34),
-              boxShadow: DjassaTheme.shadowHeavy,
-            ),
-            child: Stack(
-              children: [
-                Positioned(
-                  right: -34,
-                  bottom: -24,
-                  child: Icon(
-                    data.icon,
-                    size: 190,
-                    color: DjassaTheme.primaryWhite.withValues(alpha: .06),
-                  ),
-                ),
-                Positioned(
-                  left: 0,
-                  top: 0,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 8,
-                    ),
-                    decoration: BoxDecoration(
-                      color: data.color.withValues(alpha: .16),
-                      borderRadius: BorderRadius.circular(999),
-                      border:
-                          Border.all(color: data.color.withValues(alpha: .28)),
-                    ),
-                    child: Text(
-                      data.badge,
-                      style: TextStyle(
-                        color: data.color,
-                        fontWeight: FontWeight.w900,
-                        fontSize: 12,
-                      ),
-                    ),
-                  ),
-                ),
-                Center(
-                  child: Container(
-                    width: 172,
-                    height: 172,
-                    decoration: BoxDecoration(
-                      color: data.color.withValues(alpha: .16),
-                      shape: BoxShape.circle,
-                    ),
-                    child: Icon(data.icon, size: 88, color: data.color),
-                  )
-                      .animate(onPlay: (controller) => controller.repeat())
-                      .shimmer(
-                        duration: 1800.ms,
-                        color: DjassaTheme.primaryWhite.withValues(alpha: .18),
-                      )
-                      .scale(
-                        begin: const Offset(.96, .96),
-                        end: const Offset(1.02, 1.02),
-                        duration: 1100.ms,
-                      ),
-                ),
-                Positioned(
-                  left: 0,
-                  right: 0,
-                  bottom: 0,
-                  child: Wrap(
-                    alignment: WrapAlignment.center,
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: data.highlights
-                        .map(
-                          (item) => Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 10,
-                              vertical: 7,
-                            ),
-                            decoration: BoxDecoration(
-                              color: DjassaTheme.primaryWhite
-                                  .withValues(alpha: .1),
-                              borderRadius: BorderRadius.circular(999),
-                              border: Border.all(
-                                color: DjassaTheme.primaryWhite
-                                    .withValues(alpha: .12),
-                              ),
-                            ),
-                            child: Text(
-                              item,
-                              style: const TextStyle(
-                                color: DjassaTheme.primaryWhite,
-                                fontWeight: FontWeight.w800,
-                                fontSize: 11,
-                              ),
-                            ),
-                          ),
-                        )
-                        .toList(),
-                  ),
+              borderRadius: BorderRadius.circular(32),
+              boxShadow: [
+                BoxShadow(
+                  color: data.accentColor.withOpacity(0.15),
+                  blurRadius: 20,
+                  offset: const Offset(0, 10),
                 ),
               ],
             ),
-          ),
-        ),
-        const SizedBox(height: 28),
-        Text(
-          data.title,
-          textAlign: TextAlign.center,
-          style: Theme.of(context).textTheme.displaySmall?.copyWith(
-                color: DjassaTheme.primaryBlack,
-                fontWeight: FontWeight.w900,
-                height: 1.08,
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(32),
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  // Image de fond
+                  Image.network(
+                    data.imageUrl,
+                    fit: BoxFit.cover,
+                    loadingBuilder: (context, child, progress) {
+                      if (progress == null) return child;
+                      return Container(
+                        color: Colors.grey.shade100,
+                        child: Center(
+                          child: CircularProgressIndicator(
+                            value: progress.expectedTotalBytes != null
+                                ? progress.cumulativeBytesLoaded / progress.expectedTotalBytes!
+                                : null,
+                            color: data.accentColor,
+                          ),
+                        ),
+                      );
+                    },
+                    errorBuilder: (_, __, ___) => Container(
+                      color: Colors.grey.shade200,
+                      child: Icon(data.icon, size: 80, color: Colors.grey.shade400),
+                    ),
+                  ),
+
+                  // Overlay Dégradé pour lisibilité
+                  Container(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [
+                          Colors.black.withOpacity(0.1),
+                          Colors.black.withOpacity(0.7),
+                        ],
+                      ),
+                    ),
+                  ),
+
+                  // Contenu flottant (Badge + Icon)
+                  Positioned(
+                    top: 24,
+                    left: 24,
+                    right: 24,
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        // Badge Glassmorphism
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withOpacity(0.2),
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(color: Colors.white.withOpacity(0.3)),
+                          ),
+                          child: Text(
+                            data.badge,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ),
+                        
+                        // Icone principale dans un cercle
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            shape: BoxShape.circle,
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.1),
+                                blurRadius: 10,
+                              ),
+                            ],
+                          ),
+                          child: Icon(data.icon, color: data.accentColor, size: 28),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
               ),
-        ).animate().fadeIn(duration: 300.ms).slideY(begin: .08, end: 0),
-        const SizedBox(height: 12),
-        Text(
-          data.subtitle,
-          textAlign: TextAlign.center,
-          style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                color: DjassaTheme.primaryBlack.withValues(alpha: .62),
-                height: 1.45,
-              ),
-        ),
-      ],
+            ),
+          )
+          .animate(target: isActive ? 1 : 0)
+          .fadeIn(duration: 600.ms)
+          .slideX(begin: 0.2, end: 0, duration: 600.ms, curve: Curves.easeOutCubic),
+
+          const SizedBox(height: 32),
+
+          // --- TEXTE DESCRIPTIF ---
+          Text(
+            data.title,
+            textAlign: TextAlign.center,
+            style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                  fontWeight: FontWeight.w900,
+                  color: DjassaTheme.primaryBlack,
+                  height: 1.2,
+                ),
+          )
+          .animate(target: isActive ? 1 : 0)
+          .fadeIn(delay: 200.ms, duration: 500.ms)
+          .slideY(begin: 0.2, end: 0, duration: 500.ms),
+
+          const SizedBox(height: 16),
+
+          Text(
+            data.subtitle,
+            textAlign: TextAlign.center,
+            style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                  color: Colors.grey.shade600,
+                  height: 1.5,
+                  fontSize: 16,
+                ),
+          )
+          .animate(target: isActive ? 1 : 0)
+          .fadeIn(delay: 300.ms, duration: 500.ms)
+          .slideY(begin: 0.2, end: 0, duration: 500.ms),
+        ],
+      ),
     );
   }
 }
 
 class _OnboardingPageData {
   const _OnboardingPageData({
-    required this.icon,
+    required this.imageUrl,
     required this.badge,
     required this.title,
     required this.subtitle,
-    required this.color,
-    required this.highlights,
+    required this.icon,
+    required this.accentColor,
   });
 
-  final IconData icon;
+  final String imageUrl;
   final String badge;
   final String title;
   final String subtitle;
-  final Color color;
-  final List<String> highlights;
+  final IconData icon;
+  final Color accentColor;
 }

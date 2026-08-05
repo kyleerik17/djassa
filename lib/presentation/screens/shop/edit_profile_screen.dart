@@ -8,6 +8,7 @@ import 'package:supabase_flutter/supabase_flutter.dart' hide User;
 
 import '../../../core/services/supabase_service.dart';
 import '../../../core/theme/djassa_theme.dart';
+import '../../../core/utils/constants.dart';
 import '../../../domain/entities/user.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/core_providers.dart';
@@ -96,8 +97,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
     // Mise à jour directe de avatar_url dans profiles
     await SupabaseService.client
         .from('profiles')
-        .update({'avatar_url': publicUrl})
-        .eq('id', user.id);
+        .update({'avatar_url': publicUrl}).eq('id', user.id);
 
     return publicUrl;
   }
@@ -107,7 +107,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
 
     final currentUser = ref.read(authNotifierProvider).user;
     if (currentUser == null) {
-      context.go('/login');
+      context.go(AppConstants.loginRoute);
       return;
     }
 
@@ -146,7 +146,7 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
               backgroundColor: Colors.green,
             ),
           );
-          context.go('/profile');
+          context.go(AppConstants.profileRoute);
         },
       );
     } catch (e) {
@@ -162,64 +162,58 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
   @override
   Widget build(BuildContext context) {
     final user = ref.watch(authNotifierProvider).user;
+    final displayName = [_nameController.text.trim(), _surnameController.text.trim()]
+        .where((part) => part.isNotEmpty)
+        .join(' ');
 
     return ShopScaffold(
       currentIndex: 4,
+      showSellButton: false,
       title: 'Modifier profil',
       showBackButton: true,
       child: Form(
         key: _formKey,
+        onChanged: () => setState(() {}),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Center(
-              child: Stack(
-                children: [
-                  CircleAvatar(
-                    radius: 58,
-                    backgroundColor:
-                        DjassaTheme.accentOrange.withValues(alpha: .13),
-                    backgroundImage: _avatarBytes != null
-                        ? MemoryImage(_avatarBytes!)
-                        : (user?.avatarUrl != null &&
-                                user!.avatarUrl!.trim().isNotEmpty)
-                            ? NetworkImage(user.avatarUrl!) as ImageProvider
-                            : null,
-                    child: _avatarBytes == null &&
-                            (user?.avatarUrl == null ||
-                                user!.avatarUrl!.trim().isEmpty)
-                        ? const Icon(
-                            Icons.person_rounded,
-                            color: DjassaTheme.accentOrange,
-                            size: 54,
-                          )
-                        : null,
+            const SizedBox(height: 8),
+            _AvatarPicker(
+              avatarBytes: _avatarBytes,
+              avatarUrl: user?.avatarUrl,
+              displayName: displayName.isEmpty ? user?.email : displayName,
+              onTap: _pickAvatar,
+            ),
+            const SizedBox(height: 32),
+
+            const SectionTitle(title: 'Informations personnelles'),
+            const SizedBox(height: 12),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: _ProfileField(
+                    controller: _nameController,
+                    label: 'Nom',
+                    icon: Icons.person_outline_rounded,
+                    textCapitalization: TextCapitalization.words,
                   ),
-                  Positioned(
-                    right: 0,
-                    bottom: 0,
-                    child: IconButton.filled(
-                      style: IconButton.styleFrom(
-                        backgroundColor: DjassaTheme.accentOrange,
-                      ),
-                      onPressed: _pickAvatar,
-                      icon: const Icon(Icons.camera_alt_rounded),
-                    ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: _ProfileField(
+                    controller: _surnameController,
+                    label: 'Prénom',
+                    icon: Icons.badge_outlined,
+                    textCapitalization: TextCapitalization.words,
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
-            const SizedBox(height: 24),
-            _ProfileField(
-              controller: _nameController,
-              label: 'Nom',
-              icon: Icons.person_outline_rounded,
-            ),
-            _ProfileField(
-              controller: _surnameController,
-              label: 'Prénom',
-              icon: Icons.badge_outlined,
-            ),
+
+            const SizedBox(height: 20),
+            const SectionTitle(title: 'Coordonnées'),
+            const SizedBox(height: 12),
             _ProfileField(
               controller: _phoneController,
               label: 'Téléphone',
@@ -231,14 +225,18 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
               label: 'Email',
               icon: Icons.email_outlined,
               keyboardType: TextInputType.emailAddress,
+              textInputAction: TextInputAction.done,
             ),
-            const SizedBox(height: 12),
+
+            const SizedBox(height: 20),
             SizedBox(
               width: double.infinity,
+              height: 54,
               child: FilledButton.icon(
                 style: FilledButton.styleFrom(
                   backgroundColor: DjassaTheme.accentOrange,
-                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  disabledBackgroundColor:
+                      DjassaTheme.accentOrange.withValues(alpha: .5),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(18),
                   ),
@@ -248,15 +246,137 @@ class _EditProfileScreenState extends ConsumerState<EditProfileScreen> {
                     ? const SizedBox(
                         width: 18,
                         height: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2),
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
                       )
                     : const Icon(Icons.save_rounded),
-                label: Text(_isSaving ? 'Sauvegarde...' : 'Enregistrer'),
+                label: Text(
+                  _isSaving ? 'Sauvegarde...' : 'Enregistrer',
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w800,
+                    fontSize: 15,
+                  ),
+                ),
               ),
             ),
             const SizedBox(height: 88),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// Avatar mis en valeur : anneau dégradé, ombre douce, bouton caméra
+/// détaché avec sa propre ombre, et petit rappel du nom en dessous
+/// pour donner un retour visuel immédiat pendant la saisie.
+class _AvatarPicker extends StatelessWidget {
+  const _AvatarPicker({
+    required this.avatarBytes,
+    required this.avatarUrl,
+    required this.displayName,
+    required this.onTap,
+  });
+
+  final Uint8List? avatarBytes;
+  final String? avatarUrl;
+  final String? displayName;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final hasNetworkAvatar = avatarUrl != null && avatarUrl!.trim().isNotEmpty;
+    final hasAnyAvatar = avatarBytes != null || hasNetworkAvatar;
+
+    return Center(
+      child: Column(
+        children: [
+          GestureDetector(
+            onTap: onTap,
+            child: Stack(
+              clipBehavior: Clip.none,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(4),
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    gradient: LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [
+                        DjassaTheme.accentOrange,
+                        DjassaTheme.accentOrange.withValues(alpha: .35),
+                      ],
+                    ),
+                  ),
+                  child: CircleAvatar(
+                    radius: 56,
+                    backgroundColor: DjassaTheme.primaryWhite,
+                    child: CircleAvatar(
+                      radius: 52,
+                      backgroundColor:
+                          DjassaTheme.accentOrange.withValues(alpha: .12),
+                      backgroundImage: avatarBytes != null
+                          ? MemoryImage(avatarBytes!)
+                          : hasNetworkAvatar
+                              ? NetworkImage(avatarUrl!) as ImageProvider
+                              : null,
+                      child: hasAnyAvatar
+                          ? null
+                          : const Icon(
+                              Icons.person_rounded,
+                              color: DjassaTheme.accentOrange,
+                              size: 48,
+                            ),
+                    ),
+                  ),
+                ),
+                Positioned(
+                  right: -2,
+                  bottom: -2,
+                  child: Container(
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: DjassaTheme.primaryWhite,
+                      boxShadow: DjassaTheme.shadowLight,
+                    ),
+                    padding: const EdgeInsets.all(3),
+                    child: CircleAvatar(
+                      radius: 18,
+                      backgroundColor: DjassaTheme.accentOrange,
+                      child: const Icon(
+                        Icons.camera_alt_rounded,
+                        color: Colors.white,
+                        size: 18,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
+          Text(
+            displayName?.trim().isNotEmpty == true
+                ? displayName!.trim()
+                : 'Ajouter une photo de profil',
+            style: TextStyle(
+              fontWeight: FontWeight.w700,
+              fontSize: 15,
+              color: DjassaTheme.textPrimary.withValues(alpha: .85),
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            'Touchez la photo pour la modifier',
+            style: TextStyle(
+              fontSize: 12,
+              color: DjassaTheme.textSecondary.withValues(alpha: .8),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -268,12 +388,16 @@ class _ProfileField extends StatelessWidget {
     required this.label,
     required this.icon,
     this.keyboardType,
+    this.textCapitalization = TextCapitalization.none,
+    this.textInputAction = TextInputAction.next,
   });
 
   final TextEditingController controller;
   final String label;
   final IconData icon;
   final TextInputType? keyboardType;
+  final TextCapitalization textCapitalization;
+  final TextInputAction textInputAction;
 
   @override
   Widget build(BuildContext context) {
@@ -282,6 +406,9 @@ class _ProfileField extends StatelessWidget {
       child: TextFormField(
         controller: controller,
         keyboardType: keyboardType,
+        textCapitalization: textCapitalization,
+        textInputAction: textInputAction,
+        style: const TextStyle(fontWeight: FontWeight.w600),
         validator: (value) {
           if (value == null || value.trim().isEmpty) {
             return 'Champ obligatoire';
@@ -290,10 +417,35 @@ class _ProfileField extends StatelessWidget {
         },
         decoration: InputDecoration(
           labelText: label,
-          prefixIcon: Icon(icon),
+          prefixIcon: Icon(
+            icon,
+            color: DjassaTheme.textPrimary.withValues(alpha: .45),
+            size: 20,
+          ),
+          filled: true,
           fillColor: DjassaTheme.primaryWhite,
+          contentPadding:
+              const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
           border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(18),
+            borderRadius: BorderRadius.circular(16),
+            borderSide: BorderSide(color: DjassaTheme.borderMedium),
+          ),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(16),
+            borderSide: BorderSide(color: DjassaTheme.borderMedium),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(16),
+            borderSide:
+                const BorderSide(color: DjassaTheme.accentOrange, width: 1.6),
+          ),
+          errorBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(16),
+            borderSide: BorderSide(color: Colors.red.shade300),
+          ),
+          focusedErrorBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(16),
+            borderSide: BorderSide(color: Colors.red.shade400, width: 1.6),
           ),
         ),
       ),

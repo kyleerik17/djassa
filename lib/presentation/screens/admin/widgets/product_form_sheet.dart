@@ -1,298 +1,757 @@
+import 'dart:io';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:sizer/sizer.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:path/path.dart'
+    as path; // Ajoutez cette dépendance dans pubspec.yaml si besoin, ou utilisez string manipulation
 
-import '../../../../core/theme/djassa_theme.dart';
-import '../../../../data/sources/remote/admin_service.dart';
-import 'form_widgets.dart';
+// Importez votre thème ici
+// import '../../../../core/theme/djassa_theme.dart';
 
-class AdminProductFormSheet extends StatefulWidget {
-  const AdminProductFormSheet({
-    super.key,
-    required this.categories,
-    this.product,
-  });
-  final List<AdminCategory> categories;
-  final AdminProduct? product;
-
-  @override
-  State<AdminProductFormSheet> createState() => _AdminProductFormSheetState();
+// --- Modèles Locaux pour l'UI ---
+class VehicleMake {
+  final String id;
+  final String name;
+  VehicleMake({required this.id, required this.name});
 }
 
-class _AdminProductFormSheetState extends State<AdminProductFormSheet> {
-  final _formKey = GlobalKey<FormState>();
-  late final TextEditingController _nameController;
-  late final TextEditingController _descriptionController;
-  late final TextEditingController _compatibilityController;
-  late final TextEditingController _priceController;
-  late final TextEditingController _oldPriceController;
-  late final TextEditingController _stockController;
-  late final TextEditingController _ratingController;
-  late final TextEditingController _badgeController;
-  late final TextEditingController _imageUrlController;
-  String? _categoryId;
-  String _iconName = 'car';
-  bool _isActive = true;
+class VehicleModel {
+  final String id;
+  final String name;
+  VehicleModel({required this.id, required this.name});
+}
 
-  static const _icons = [
-    'car',
-    'settings',
-    'brake',
-    'car_repair',
-    'electric_bolt',
-    'battery',
-    'oil',
-    'suspension',
-    'light',
-    'tire'
-  ];
+class VehicleGeneration {
+  final String id;
+  final String name;
+  final int yearStart;
+  VehicleGeneration(
+      {required this.id, required this.name, required this.yearStart});
+}
+
+class AdminCategory {
+  final String id;
+  final String name;
+  AdminCategory({required this.id, required this.name});
+}
+
+// Provider Supabase
+final supabaseClientProvider =
+    Provider<SupabaseClient>((ref) => Supabase.instance.client);
+
+class AdminProductFormSheet extends ConsumerStatefulWidget {
+  const AdminProductFormSheet({super.key, this.product});
+  final Map<String, dynamic>? product;
+
+  @override
+  ConsumerState<AdminProductFormSheet> createState() =>
+      _AdminProductFormSheetState();
+}
+
+class _AdminProductFormSheetState extends ConsumerState<AdminProductFormSheet> {
+  // Controllers
+  final _nameController = TextEditingController();
+  final _descController = TextEditingController();
+  final _priceController = TextEditingController();
+  final _stockController = TextEditingController();
+  final _badgeController = TextEditingController(text: 'Top');
+
+  // État UI
+  bool _isSubmitting = false;
+  bool _isLoadingData = true;
+  bool _isUploadingImage = false; // Nouvel état pour l'upload
+  File? _imageFile;
+  String? _existingImageUrl;
+  bool _isAutoPart = false;
+
+  // Données Dynamiques
+  List<AdminCategory> _categories = [];
+  List<VehicleMake> _makes = [];
+  List<VehicleModel> _models = [];
+  List<VehicleGeneration> _generations = [];
+
+  // Sélections
+  String? _selectedCategoryId;
+  String? _selectedMakeId;
+  String? _selectedModelId;
+  String? _selectedGenId;
+
+  // Couleurs
+  Color get accentOrange => const Color(0xFFFF6B00);
+  Color get primaryBlack => const Color(0xFF121212);
 
   @override
   void initState() {
     super.initState();
-    final p = widget.product;
-    _nameController = TextEditingController(text: p?.name ?? '');
-    _descriptionController = TextEditingController(text: p?.description ?? '');
-    _compatibilityController =
-        TextEditingController(text: p?.compatibility ?? '');
-    _priceController =
-        TextEditingController(text: p == null ? '' : '${p.price}');
-    _oldPriceController = TextEditingController(
-        text: p == null || p.oldPrice == 0 ? '' : '${p.oldPrice}');
-    _stockController =
-        TextEditingController(text: p == null ? '' : '${p.stock}');
-    _ratingController = TextEditingController(
-        text: p == null ? '4.5' : p.rating.toStringAsFixed(1));
-    _badgeController = TextEditingController(text: p?.badge ?? 'Top');
-    _imageUrlController = TextEditingController(text: p?.imageUrl ?? '');
-    _categoryId = p?.categoryId;
-    _iconName = _icons.contains(p?.iconName) ? p!.iconName : 'car';
-    _isActive = p?.isActive ?? true;
+    _loadInitialData();
   }
 
-  @override
-  void dispose() {
-    _nameController.dispose();
-    _descriptionController.dispose();
-    _compatibilityController.dispose();
-    _priceController.dispose();
-    _oldPriceController.dispose();
-    _stockController.dispose();
-    _ratingController.dispose();
-    _badgeController.dispose();
-    _imageUrlController.dispose();
-    super.dispose();
+  Future<void> _loadInitialData() async {
+    final supabase = ref.read(supabaseClientProvider);
+    try {
+      final results = await Future.wait([
+        supabase.from('categories').select('id, name').eq('is_active', true),
+        supabase.from('vehicle_makes').select('id, name').eq('is_active', true),
+      ]);
+
+      _categories = (results[0] as List)
+          .map((c) => AdminCategory(id: c['id'], name: c['name']))
+          .toList();
+      _makes = (results[1] as List)
+          .map((m) => VehicleMake(id: m['id'], name: m['name']))
+          .toList();
+
+      if (widget.product != null) {
+        final p = widget.product!;
+        _nameController.text = p['name'] ?? '';
+        _descController.text = p['description'] ?? '';
+        _priceController.text = '${p['price']}';
+        _stockController.text = '${p['stock']}';
+        _badgeController.text = p['badge'] ?? 'Top';
+        _selectedCategoryId = p['category_id'];
+        _existingImageUrl = p['image_url'];
+
+        final compatRes = await supabase
+            .from('product_compatibility')
+            .select('make_id, model_id, generation_id')
+            .eq('product_id', p['id'])
+            .limit(1);
+
+        if (compatRes.isNotEmpty) {
+          setState(() {
+            _isAutoPart = true;
+            _selectedMakeId = compatRes[0]['make_id'];
+            _selectedModelId = compatRes[0]['model_id'];
+            _selectedGenId = compatRes[0]['generation_id'];
+          });
+          if (_selectedMakeId != null) await _onMakeChanged(_selectedMakeId);
+          if (_selectedModelId != null) await _onModelChanged(_selectedModelId);
+        }
+      }
+    } catch (e) {
+      debugPrint("Erreur chargement données: $e");
+      _showError("Impossible de charger les données initiales: $e");
+    } finally {
+      if (mounted) setState(() => _isLoadingData = false);
+    }
   }
 
-  @override
-  Widget build(BuildContext context) {
-    final bottomInset = MediaQuery.of(context).viewInsets.bottom;
-    final isEditing = widget.product != null;
-    return Padding(
-      padding: EdgeInsets.only(bottom: bottomInset),
-      child: DraggableScrollableSheet(
-        expand: false,
-        initialChildSize: .92,
-        minChildSize: .72,
-        maxChildSize: .96,
-        builder: (context, scrollController) => Container(
-          decoration: const BoxDecoration(
-            color: DjassaTheme.backgroundSecondary,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(30)),
-          ),
-          child: Form(
-            key: _formKey,
-            child: ListView(
-              controller: scrollController,
-              padding: const EdgeInsets.fromLTRB(16, 10, 16, 24),
-              children: [
-                Center(
-                    child: Container(
-                        width: 42,
-                        height: 5,
-                        decoration: BoxDecoration(
-                            color: DjassaTheme.borderLight,
-                            borderRadius: BorderRadius.circular(999)))),
-                const SizedBox(height: 18),
-                Row(children: [
-                  Expanded(
-                      child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                        Text(
-                            isEditing
-                                ? 'Modifier l\'article'
-                                : 'Nouvel article',
-                            style: Theme.of(context)
-                                .textTheme
-                                .displaySmall
-                                ?.copyWith(height: 1.05)),
-                        const SizedBox(height: 5),
-                        Text(
-                            'Les clients verront ces informations dans la boutique.',
-                            style: Theme.of(context).textTheme.bodyMedium),
-                      ])),
-                  IconButton.filledTonal(
-                      onPressed: () => Navigator.of(context).pop(),
-                      icon: const Icon(Icons.close_rounded)),
-                ]),
-                const SizedBox(height: 18),
-                FormSection(title: 'Informations principales', children: [
-                  TextFormField(
-                      controller: _nameController,
-                      textInputAction: TextInputAction.next,
-                      decoration: const InputDecoration(
-                          labelText: 'Nom de l\'article',
-                          prefixIcon: Icon(Icons.sell_outlined)),
-                      validator: (v) => v == null || v.trim().isEmpty
-                          ? 'Nom obligatoire'
-                          : null),
-                  const SizedBox(height: 12),
-                  DropdownButtonFormField<String>(
-                      initialValue:
-                          widget.categories.any((c) => c.id == _categoryId)
-                              ? _categoryId
-                              : null,
-                      decoration: const InputDecoration(
-                          labelText: 'Rayon',
-                          prefixIcon: Icon(Icons.grid_view_rounded)),
-                      items: widget.categories
-                          .map((c) => DropdownMenuItem(
-                              value: c.id, child: Text(c.name)))
-                          .toList(),
-                      onChanged: (v) => setState(() => _categoryId = v),
-                      validator: (v) =>
-                          v == null ? 'Choisissez un rayon' : null),
-                  const SizedBox(height: 12),
-                  TextFormField(
-                      controller: _descriptionController,
-                      minLines: 3,
-                      maxLines: 5,
-                      decoration: const InputDecoration(
-                          labelText: 'Description', alignLabelWithHint: true)),
-                  const SizedBox(height: 12),
-                  TextFormField(
-                      controller: _compatibilityController,
-                      decoration: const InputDecoration(
-                          labelText: 'Compatibilité',
-                          hintText: 'Toyota, Hyundai, Kia...',
-                          prefixIcon: Icon(Icons.car_repair_rounded))),
-                ]),
-                const SizedBox(height: 14),
-                FormSection(title: 'Prix & stock', children: [
-                  Row(children: [
-                    Expanded(
-                        child: NumberField(
-                            controller: _priceController,
-                            label: 'Prix FCFA',
-                            requiredField: true)),
-                    const SizedBox(width: 10),
-                    Expanded(
-                        child: NumberField(
-                            controller: _oldPriceController,
-                            label: 'Ancien prix')),
-                  ]),
-                  const SizedBox(height: 12),
-                  Row(children: [
-                    Expanded(
-                        child: NumberField(
-                            controller: _stockController,
-                            label: 'Stock',
-                            requiredField: true)),
-                    const SizedBox(width: 10),
-                    Expanded(
-                        child: TextFormField(
-                            controller: _ratingController,
-                            keyboardType: const TextInputType.numberWithOptions(
-                                decimal: true),
-                            decoration: const InputDecoration(
-                                labelText: 'Note',
-                                prefixIcon: Icon(Icons.star_rounded)),
-                            validator: (v) {
-                              final r = double.tryParse(
-                                  v?.replaceAll(',', '.') ?? '');
-                              if (r == null || r < 0 || r > 5) return '0 à 5';
-                              return null;
-                            })),
-                  ]),
-                ]),
-                const SizedBox(height: 14),
-                FormSection(title: 'Merchandising', children: [
-                  Row(children: [
-                    Expanded(
-                        child: TextFormField(
-                            controller: _badgeController,
-                            decoration: const InputDecoration(
-                                labelText: 'Badge',
-                                hintText: 'Top, Promo, -20%',
-                                prefixIcon: Icon(Icons.local_offer_outlined)))),
-                    const SizedBox(width: 10),
-                    Expanded(
-                        child: DropdownButtonFormField<String>(
-                            initialValue: _iconName,
-                            decoration: const InputDecoration(
-                                labelText: 'Icône',
-                                prefixIcon: Icon(Icons.category_outlined)),
-                            items: _icons
-                                .map((i) =>
-                                    DropdownMenuItem(value: i, child: Text(i)))
-                                .toList(),
-                            onChanged: (v) =>
-                                setState(() => _iconName = v ?? 'car'))),
-                  ]),
-                  const SizedBox(height: 12),
-                  TextFormField(
-                      controller: _imageUrlController,
-                      keyboardType: TextInputType.url,
-                      decoration: const InputDecoration(
-                          labelText: 'Image URL optionnelle',
-                          prefixIcon: Icon(Icons.image_outlined))),
-                  const SizedBox(height: 8),
-                  SwitchListTile.adaptive(
-                      contentPadding: EdgeInsets.zero,
-                      title: const Text('Publier dans la boutique'),
-                      subtitle: Text(_isActive
-                          ? 'L\'article est visible par les clients'
-                          : 'L\'article reste brouillon / archivé'),
-                      value: _isActive,
-                      onChanged: (v) => setState(() => _isActive = v)),
-                ]),
-                const SizedBox(height: 18),
-                SizedBox(
-                    width: double.infinity,
-                    child: FilledButton.icon(
-                        style: FilledButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(vertical: 16),
-                            shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(18))),
-                        onPressed: _submit,
-                        icon: Icon(
-                            isEditing ? Icons.save_rounded : Icons.add_rounded),
-                        label: Text(
-                            isEditing ? 'Enregistrer' : 'Ajouter l\'article'))),
-              ],
-            ),
-          ),
-        ),
+  Future<void> _onMakeChanged(String? makeId) async {
+    final supabase = ref.read(supabaseClientProvider);
+    setState(() {
+      _selectedMakeId = makeId;
+      _selectedModelId = null;
+      _selectedGenId = null;
+      _models = [];
+      _generations = [];
+    });
+    if (makeId != null) {
+      final res = await supabase
+          .from('vehicle_models')
+          .select('id, name')
+          .eq('make_id', makeId);
+      setState(() => _models = (res as List)
+          .map((m) => VehicleModel(id: m['id'], name: m['name']))
+          .toList());
+    }
+  }
+
+  Future<void> _onModelChanged(String? modelId) async {
+    final supabase = ref.read(supabaseClientProvider);
+    setState(() {
+      _selectedModelId = modelId;
+      _selectedGenId = null;
+      _generations = [];
+    });
+    if (modelId != null) {
+      final res = await supabase
+          .from('vehicle_generations')
+          .select('id, name, year_start')
+          .eq('model_id', modelId)
+          .order('year_start', ascending: false);
+      setState(() => _generations = (res as List)
+          .map((g) => VehicleGeneration(
+              id: g['id'], name: g['name'], yearStart: g['year_start']))
+          .toList());
+    }
+  }
+
+  // ✅ CORRECTION IMAGE PICKER
+  Future<void> _pickImage() async {
+    try {
+      final ImagePicker picker = ImagePicker();
+      // On demande une image de qualité maximale mais on laisse le système la compresser si possible
+      final XFile? pickedFile = await picker.pickImage(
+        source: ImageSource.gallery,
+        maxWidth:
+            1800, // Limite la largeur pour éviter les fichiers trop lourds
+        maxHeight: 1800,
+        imageQuality: 85, // Compression JPEG à 85%
+      );
+
+      if (pickedFile != null) {
+        setState(() {
+          _imageFile = File(pickedFile.path);
+          _existingImageUrl =
+              null; // On efface l'ancienne URL car une nouvelle image arrive
+        });
+      }
+    } catch (e) {
+      _showError("Erreur lors de la sélection de l'image: $e");
+    }
+  }
+
+  // ✅ CORRECTION UPLOAD SUPABASE
+  Future<String?> _uploadImageToSupabase() async {
+    if (_imageFile == null) return _existingImageUrl;
+
+    setState(() => _isUploadingImage = true);
+    final supabase = ref.read(supabaseClientProvider);
+
+    try {
+      // Génération d'un nom de fichier unique pour éviter les conflits
+      final ext = path.extension(_imageFile!
+          .path); // Nécessite import 'package:path/path.dart' as path;
+      // Si vous ne voulez pas ajouter le package path, utilisez:
+      // final ext = _imageFile!.path.split('.').last;
+
+      final fileName =
+          '${DateTime.now().millisecondsSinceEpoch}_${DateTime.now().microsecondsSinceEpoch}$ext';
+
+      debugPrint("Début upload vers: products/$fileName");
+
+      // Upload du fichier
+      final storageResponse = await supabase.storage
+          .from(
+              'products') // Assurez-vous que ce bucket existe et est PUBLIC ou a les bonnes policies
+          .upload(fileName, _imageFile!);
+
+      if (storageResponse.isEmpty) {
+        throw Exception("Échec de l'upload: Réponse vide");
+      }
+
+      // Récupération de l'URL publique
+      final imageUrl = supabase.storage.from('products').getPublicUrl(fileName);
+      debugPrint("Upload réussi: $imageUrl");
+
+      return imageUrl;
+    } on StorageException catch (e) {
+      debugPrint("Erreur Storage Supabase: ${e.message}");
+      _showError(
+          "Erreur d'upload: ${e.message}. Vérifiez que le bucket 'products' existe et est public.");
+      return null;
+    } catch (e) {
+      debugPrint("Erreur générale upload: $e");
+      _showError("Une erreur inattendue est survenue lors de l'upload.");
+      return null;
+    } finally {
+      if (mounted) setState(() => _isUploadingImage = false);
+    }
+  }
+
+  final _formKey = GlobalKey<FormState>();
+
+  Future<void> _submit() async {
+    if (!_formKey.currentState!.validate()) return;
+    if (_selectedCategoryId == null) {
+      _showError("Veuillez sélectionner une catégorie");
+      return;
+    }
+    if (_isAutoPart &&
+        (_selectedGenId == null ||
+            _selectedModelId == null ||
+            _selectedMakeId == null)) {
+      _showError("Veuillez compléter les détails techniques");
+      return;
+    }
+
+    setState(() => _isSubmitting = true);
+    final supabase = ref.read(supabaseClientProvider);
+
+    try {
+      // 1. Upload Image d'abord
+      final imageUrl = await _uploadImageToSupabase();
+
+      // Si l'upload a échoué et qu'on n'avait pas d'image existante, on arrête
+      if (imageUrl == null && _existingImageUrl == null && _imageFile != null) {
+        _showError("L'image n'a pas pu être téléchargée. Veuillez réessayer.");
+        setState(() => _isSubmitting = false);
+        return;
+      }
+
+      final productData = {
+        'name': _nameController.text.trim(),
+        'description': _descController.text.trim(),
+        'price': int.parse(_priceController.text),
+        'stock': int.parse(_stockController.text),
+        'badge': _badgeController.text.trim(),
+        'category_id': _selectedCategoryId,
+        'image_url': imageUrl ??
+            _existingImageUrl, // Garde l'ancienne si pas de nouvelle
+        'updated_at': DateTime.now().toIso8601String(),
+        'slug': _nameController.text.trim().toLowerCase().replaceAll(' ', '-'),
+      };
+
+      String productId;
+      if (widget.product != null) {
+        productId = widget.product!['id'];
+        await supabase.from('products').update(productData).eq('id', productId);
+      } else {
+        productData['created_at'] = DateTime.now().toIso8601String();
+        final res = await supabase
+            .from('products')
+            .insert(productData)
+            .select('id')
+            .single();
+        productId = res['id'];
+      }
+
+      // Gestion des détails techniques optionnels.
+      if (_isAutoPart && _selectedGenId != null) {
+        if (widget.product != null)
+          await supabase
+              .from('product_compatibility')
+              .delete()
+              .eq('product_id', productId);
+        await supabase.from('product_compatibility').insert({
+          'product_id': productId,
+          'make_id': _selectedMakeId,
+          'model_id': _selectedModelId,
+          'generation_id': _selectedGenId,
+          'year_start':
+              _generations.firstWhere((g) => g.id == _selectedGenId).yearStart,
+        });
+      } else if (widget.product != null) {
+        await supabase
+            .from('product_compatibility')
+            .delete()
+            .eq('product_id', productId);
+      }
+
+      if (mounted) {
+        Navigator.pop(context, true);
+      }
+    } catch (e) {
+      _showError("Erreur lors de la sauvegarde: $e");
+    } finally {
+      if (mounted) setState(() => _isSubmitting = false);
+    }
+  }
+
+  void _showError(String msg) {
+    if (!mounted) return;
+    showCupertinoDialog(
+      context: context,
+      builder: (ctx) => CupertinoAlertDialog(
+        title: const Text("Attention"),
+        content: Text(msg),
+        actions: [
+          CupertinoDialogAction(
+              child: const Text("OK"), onPressed: () => Navigator.pop(ctx)),
+        ],
       ),
     );
   }
 
-  void _submit() {
-    if (!_formKey.currentState!.validate()) return;
-    Navigator.of(context).pop(AdminProductInput(
-      categoryId: _categoryId!,
-      name: _nameController.text,
-      description: _descriptionController.text,
-      compatibility: _compatibilityController.text,
-      price: int.parse(_priceController.text),
-      oldPrice: int.tryParse(_oldPriceController.text) ?? 0,
-      stock: int.parse(_stockController.text),
-      rating: double.parse(_ratingController.text.replaceAll(',', '.')),
-      badge: _badgeController.text,
-      iconName: _iconName,
-      imageUrl: _imageUrlController.text.trim().isEmpty
-          ? null
-          : _imageUrlController.text,
-      isActive: _isActive,
-    ));
+  // --- WIDGETS DE DESIGN RESPONSIVE ---
+
+  Widget _buildCard(String title, IconData icon, List<Widget> children,
+      {Color? headerColor}) {
+    return Container(
+      margin: EdgeInsets.only(bottom: 2.h),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(3.w),
+        boxShadow: [
+          BoxShadow(
+              color: Colors.black.withOpacity(0.04),
+              blurRadius: 15,
+              offset: Offset(0, 5))
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: EdgeInsets.symmetric(horizontal: 5.w, vertical: 2.h),
+            child: Row(
+              children: [
+                Container(
+                  padding: EdgeInsets.all(2.w),
+                  decoration: BoxDecoration(
+                    color: (headerColor ?? accentOrange).withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(2.w),
+                  ),
+                  child:
+                      Icon(icon, color: headerColor ?? accentOrange, size: 5.w),
+                ),
+                SizedBox(width: 3.w),
+                Text(title,
+                    style: TextStyle(
+                        fontSize: 4.5.w,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.black87)),
+              ],
+            ),
+          ),
+          Divider(height: 1, color: Colors.grey.shade100),
+          Padding(
+              padding: EdgeInsets.all(5.w), child: Column(children: children)),
+        ],
+      ),
+    );
+  }
+
+  InputDecoration _inputStyle(String label, IconData icon) {
+    return InputDecoration(
+      labelText: label,
+      labelStyle: TextStyle(fontSize: 3.5.w, color: Colors.grey[600]),
+      prefixIcon: Icon(icon, size: 5.w, color: Colors.grey[500]),
+      filled: true,
+      fillColor: const Color(0xFFF8F9FA),
+      border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(3.w),
+          borderSide: BorderSide.none),
+      enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(3.w),
+          borderSide: BorderSide.none),
+      focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(3.w),
+          borderSide: BorderSide(color: accentOrange, width: 2)),
+      contentPadding: EdgeInsets.symmetric(horizontal: 4.w, vertical: 2.h),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_isLoadingData) return const Center(child: CircularProgressIndicator());
+
+    return DraggableScrollableSheet(
+      expand: false,
+      initialChildSize: 0.95,
+      builder: (_, controller) => Container(
+        decoration: BoxDecoration(
+          color: const Color(0xFFF5F7FA),
+          borderRadius: BorderRadius.vertical(top: Radius.circular(5.w)),
+        ),
+        child: Column(
+          children: [
+            // Header
+            Container(
+              width: double.infinity,
+              padding: EdgeInsets.fromLTRB(6.w, 6.h, 6.w, 3.h),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                    colors: [accentOrange, accentOrange.withOpacity(0.8)],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight),
+                borderRadius: BorderRadius.vertical(top: Radius.circular(5.w)),
+              ),
+              child: SafeArea(
+                bottom: false,
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                              widget.product != null
+                                  ? "MODIFICATION"
+                                  : "CRÉATION",
+                              style: TextStyle(
+                                  color: Colors.white.withOpacity(0.8),
+                                  fontSize: 3.5.w,
+                                  fontWeight: FontWeight.w600,
+                                  letterSpacing: 1)),
+                          SizedBox(height: 0.5.h),
+                          Text(
+                              widget.product != null
+                                  ? "Modifier l'article"
+                                  : "Nouvel article",
+                              style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 6.w,
+                                  fontWeight: FontWeight.bold)),
+                        ]),
+                    CupertinoButton(
+                      padding: EdgeInsets.zero,
+                      onPressed: () => Navigator.pop(context),
+                      child: Container(
+                        padding: EdgeInsets.all(2.w),
+                        decoration: BoxDecoration(
+                            color: Colors.white.withOpacity(0.2),
+                            shape: BoxShape.circle),
+                        child: Icon(CupertinoIcons.xmark,
+                            color: Colors.white, size: 5.w),
+                      ),
+                    )
+                  ],
+                ),
+              ),
+            ),
+
+            // Contenu Scrollable
+            Expanded(
+              child: Form(
+                key: _formKey,
+                child: ListView(
+                  controller: controller,
+                  padding: EdgeInsets.all(5.w),
+                  children: [
+                    // IMAGE UPLOAD CIRCULAIRE AMÉLIORÉ
+                    Center(
+                      child: GestureDetector(
+                        onTap: _isUploadingImage ? null : _pickImage,
+                        child: Stack(
+                          clipBehavior: Clip.none,
+                          children: [
+                            Container(
+                              height: 28.w,
+                              width: 28.w,
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                shape: BoxShape.circle,
+                                border:
+                                    Border.all(color: Colors.white, width: 4),
+                                boxShadow: [
+                                  BoxShadow(
+                                      color: Colors.black.withOpacity(0.1),
+                                      blurRadius: 20,
+                                      offset: Offset(0, 8))
+                                ],
+                                image: _imageFile != null
+                                    ? DecorationImage(
+                                        image: FileImage(_imageFile!),
+                                        fit: BoxFit.cover)
+                                    : (_existingImageUrl != null
+                                        ? DecorationImage(
+                                            image: NetworkImage(
+                                                _existingImageUrl!),
+                                            fit: BoxFit.cover)
+                                        : null),
+                              ),
+                              child: (_imageFile == null &&
+                                      _existingImageUrl == null)
+                                  ? Icon(CupertinoIcons.camera_fill,
+                                      size: 8.w, color: Colors.grey[400])
+                                  : null,
+                            ),
+
+                            // Overlay de chargement
+                            if (_isUploadingImage)
+                              Positioned.fill(
+                                child: Container(
+                                  decoration: BoxDecoration(
+                                    color: Colors.black.withOpacity(0.5),
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: const Center(
+                                    child: CircularProgressIndicator(
+                                        color: Colors.white, strokeWidth: 3),
+                                  ),
+                                ),
+                              ),
+
+                            // Badge Add
+                            if (!_isUploadingImage)
+                              Positioned(
+                                  bottom: 0,
+                                  right: 0,
+                                  child: Container(
+                                    padding: EdgeInsets.all(2.w),
+                                    decoration: BoxDecoration(
+                                        color: accentOrange,
+                                        shape: BoxShape.circle,
+                                        border: Border.all(
+                                            color: Colors.white, width: 2)),
+                                    child: Icon(CupertinoIcons.add,
+                                        color: Colors.white, size: 4.w),
+                                  ))
+                          ],
+                        ),
+                      ),
+                    ),
+                    SizedBox(height: 4.h),
+
+                    // CARTES D'INFORMATIONS
+                    _buildCard("Général", CupertinoIcons.bag, [
+                      TextFormField(
+                          controller: _nameController,
+                          decoration:
+                              _inputStyle("Nom du produit", CupertinoIcons.tag),
+                          validator: (v) => v!.isEmpty ? "Requis" : null),
+                      SizedBox(height: 2.h),
+                      DropdownButtonFormField<String>(
+                        value: _selectedCategoryId,
+                        items: _categories
+                            .map((c) => DropdownMenuItem(
+                                value: c.id, child: Text(c.name)))
+                            .toList(),
+                        onChanged: (v) =>
+                            setState(() => _selectedCategoryId = v),
+                        decoration:
+                            _inputStyle("Catégorie", CupertinoIcons.grid)
+                                .copyWith(
+                                    filled: true,
+                                    fillColor: const Color(0xFFF8F9FA)),
+                        validator: (v) => v == null ? "Requis" : null,
+                      ),
+                      SizedBox(height: 2.h),
+                      TextFormField(
+                          controller: _descController,
+                          maxLines: 3,
+                          decoration: _inputStyle("Description détaillée",
+                                  CupertinoIcons.doc_text)
+                              .copyWith(alignLabelWithHint: true)),
+                    ]),
+
+                    _buildCard(
+                        "Vente",
+                        CupertinoIcons.creditcard,
+                        [
+                          Row(children: [
+                            Expanded(
+                                child: TextFormField(
+                                    controller: _priceController,
+                                    keyboardType: TextInputType.number,
+                                    decoration: _inputStyle("Prix (FCFA)",
+                                        CupertinoIcons.money_dollar))),
+                            SizedBox(width: 3.w),
+                            Expanded(
+                                child: TextFormField(
+                                    controller: _stockController,
+                                    keyboardType: TextInputType.number,
+                                    decoration: _inputStyle(
+                                        "Stock", CupertinoIcons.archivebox))),
+                          ]),
+                        ],
+                        headerColor: Colors.blue),
+
+                    // DÉTAILS TECHNIQUES OPTIONNELS
+                    Container(
+                      margin: EdgeInsets.only(bottom: 2.h),
+                      decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(3.w),
+                          boxShadow: [
+                            BoxShadow(
+                                color: Colors.black.withOpacity(0.04),
+                                blurRadius: 15)
+                          ]),
+                      child: ExpansionTile(
+                        initiallyExpanded: _isAutoPart,
+                        onExpansionChanged: (val) =>
+                            setState(() => _isAutoPart = val),
+                        tilePadding: EdgeInsets.symmetric(
+                            horizontal: 5.w, vertical: 1.h),
+                        leading: Container(
+                          padding: EdgeInsets.all(2.w),
+                          decoration: BoxDecoration(
+                              color: Colors.purple.withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(2.w)),
+                          child: Icon(CupertinoIcons.cube_box_fill,
+                              color: Colors.purple, size: 5.w),
+                        ),
+                        title: Text("Détails techniques",
+                            style: TextStyle(
+                                fontWeight: FontWeight.bold, fontSize: 4.5.w)),
+                        subtitle: Text(
+                            _isAutoPart
+                                ? "Masquer les détails"
+                                : "Ajouter type, modèle ou variante",
+                            style: TextStyle(fontSize: 3.2.w)),
+                        children: [
+                          Padding(
+                            padding: EdgeInsets.fromLTRB(5.w, 0, 5.w, 3.h),
+                            child: Column(
+                              children: [
+                                DropdownButtonFormField<String>(
+                                    value: _selectedMakeId,
+                                    hint: Text("Marque / gamme",
+                                        style: TextStyle(fontSize: 3.5.w)),
+                                    items: _makes
+                                        .map((m) => DropdownMenuItem(
+                                            value: m.id, child: Text(m.name)))
+                                        .toList(),
+                                    onChanged: _onMakeChanged,
+                                    decoration:
+                                        _inputStyle("", CupertinoIcons.tag)),
+                                SizedBox(height: 2.h),
+                                DropdownButtonFormField<String>(
+                                    value: _selectedModelId,
+                                    hint: Text("Modèle / variante",
+                                        style: TextStyle(fontSize: 3.5.w)),
+                                    items: _models
+                                        .map((m) => DropdownMenuItem(
+                                            value: m.id, child: Text(m.name)))
+                                        .toList(),
+                                    onChanged: _selectedMakeId != null
+                                        ? _onModelChanged
+                                        : null,
+                                    decoration: _inputStyle(
+                                        "", CupertinoIcons.cube_box)),
+                                SizedBox(height: 2.h),
+                                DropdownButtonFormField<String>(
+                                    value: _selectedGenId,
+                                    hint: Text("Année / version",
+                                        style: TextStyle(fontSize: 3.5.w)),
+                                    items: _generations
+                                        .map((g) => DropdownMenuItem(
+                                            value: g.id,
+                                            child: Text(
+                                                "${g.name} (${g.yearStart})")))
+                                        .toList(),
+                                    onChanged: _selectedModelId != null
+                                        ? (v) =>
+                                            setState(() => _selectedGenId = v)
+                                        : null,
+                                    decoration: _inputStyle(
+                                        "", CupertinoIcons.calendar_today)),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    SizedBox(height: 3.h),
+
+                    // BOUTON FINAL
+                    CupertinoButton.filled(
+                      onPressed:
+                          (_isSubmitting || _isUploadingImage) ? null : _submit,
+                      padding: EdgeInsets.symmetric(vertical: 3.h),
+                      borderRadius: BorderRadius.circular(3.w),
+                      child: _isSubmitting
+                          ? SizedBox(
+                              width: 5.w,
+                              height: 5.w,
+                              child: CircularProgressIndicator(
+                                  strokeWidth: 2, color: Colors.white))
+                          : Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                  Icon(CupertinoIcons.check_mark_circled,
+                                      size: 5.w),
+                                  SizedBox(width: 2.w),
+                                  Text("Enregistrer l'article",
+                                      style: TextStyle(
+                                          fontSize: 4.5.w,
+                                          fontWeight: FontWeight.bold))
+                                ]),
+                    ),
+                    SizedBox(height: 5.h),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }

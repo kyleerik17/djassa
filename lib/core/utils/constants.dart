@@ -11,6 +11,7 @@ class AppConstants {
   static const String registerRoute = '/register';
   static const String homeRoute = '/home';
   static const String categoriesRoute = '/categories';
+  static const String categoryDetailRoute = '/category/:name';
   static const String searchRoute = '/search';
   static const String cartRoute = '/cart';
   static const String favoritesRoute = '/favorites';
@@ -27,6 +28,8 @@ class AppConstants {
   static const String vendorRoute = '/vendor';
   static const String vendorAccountRoute = '/vendor/account';
   static const String orderChatRoute = '/order-chat/:orderId';
+  static const String forgotPasswordRoute = '/forgot-password';
+  static const String vendorOrderDetailsRoute = '/vendor/order-details/:orderId';
 
   // Assets
   static const String logoAsset = 'assets/icons/djassa_logo.png';
@@ -63,4 +66,56 @@ class AppConstants {
   static const String successAddedToFavorites = 'Ajouté aux favoris';
   static const String successOrderPlaced = 'Commande passée avec succès';
   static const String successProfileUpdated = 'Profil mis à jour';
+
+  static String categoryLocation(String name) {
+    return '/category/${Uri.encodeComponent(name)}';
+  }
+
+  static String productLocation(String id) {
+    return '/product/${Uri.encodeComponent(id)}';
+  }
+
+  static String vendorOrdersLocation() {
+    return '$vendorRoute?tab=orders';
+  }
+
+  static String vendorOrderDetailsLocation(String orderId) {
+    return '/vendor/order-details/${Uri.encodeComponent(orderId)}';
+  }
+
+  static String paymentLocation(
+    String orderId, {
+    int? amount,
+    String? orderNumber,
+  }) {
+    final uri = Uri(
+      path: '/payment/${Uri.encodeComponent(orderId)}',
+      queryParameters: {
+        if (amount != null) 'amount': '$amount',
+        if (orderNumber != null && orderNumber.trim().isNotEmpty)
+          'number': orderNumber.trim(),
+      },
+    );
+    return uri.toString();
+  }
+
+  static String searchLocation({String? query, String? category}) {
+    final params = <String, String>{
+      if (query != null && query.trim().isNotEmpty) 'q': query.trim(),
+      if (category != null && category.trim().isNotEmpty)
+        'category': category.trim(),
+    };
+    final uri = Uri(path: searchRoute, queryParameters: params);
+    return uri.toString();
+  }
+
+  static String orderChatLocation(String orderId, {String? orderNumber}) {
+    final uri = Uri(
+      path: '/order-chat/${Uri.encodeComponent(orderId)}',
+      queryParameters: orderNumber == null || orderNumber.isEmpty
+          ? null
+          : {'number': orderNumber},
+    );
+    return uri.toString();
+  }
 }

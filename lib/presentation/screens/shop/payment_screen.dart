@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/theme/djassa_theme.dart';
+import '../../../core/utils/constants.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/core_providers.dart';
 import '../../widgets/shop/payment_ui.dart';
@@ -51,7 +52,7 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen> {
   Future<void> _pay() async {
     final user = ref.read(authNotifierProvider).user;
     if (user == null) {
-      context.go('/login');
+      context.go(AppConstants.loginRoute);
       return;
     }
 
@@ -116,7 +117,7 @@ class _PaymentScreenState extends ConsumerState<PaymentScreen> {
             ),
           ),
         );
-        context.go('/orders');
+        context.go(AppConstants.ordersRoute);
       } else if (success == false) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(

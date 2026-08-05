@@ -2,10 +2,8 @@ import 'package:djassa/presentation/providers/core_providers.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../../core/theme/djassa_theme.dart';
 import '../../../../data/sources/remote/admin_service.dart';
 
-import '../../shop/shop_data.dart';
 import '../widgets/error_widgets.dart';
 import '../widgets/hero_headers.dart';
 import '../widgets/product_card.dart';

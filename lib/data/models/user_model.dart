@@ -1,4 +1,4 @@
-import 'dart:convert';
+import 'dart:convert' as convert; // ✅ Alias pour éviter les conflits de nom
 import '../../domain/entities/user.dart';
 
 /// Modèle de données utilisateur pour la sérialisation
@@ -15,10 +15,10 @@ class UserModel extends User {
     super.createdAt,
   });
 
-  /// Crée depuis JSON
+  /// Crée depuis un Map JSON
   factory UserModel.fromJson(Map<String, dynamic> json) {
     return UserModel(
-      id: json['id'] ?? '',
+      id: json['id']?.toString() ?? '', // ✅ Sécurisation si l'ID est un int
       name: json['name'] ?? '',
       surname: json['surname'] ?? '',
       phone: json['phone'] ?? '',
@@ -27,18 +27,23 @@ class UserModel extends User {
       isVerified: json['is_verified'] ?? false,
       role: json['role'] ?? 'client',
       createdAt: json['created_at'] != null
-          ? DateTime.parse(json['created_at'])
+          ? DateTime.tryParse(json['created_at']) // ✅ TryParse pour éviter les crashs
           : null,
     );
   }
 
   /// Crée depuis une chaîne JSON
   factory UserModel.fromJsonString(String jsonString) {
-    final json = jsonDecode(jsonString) as Map<String, dynamic>;
-    return UserModel.fromJson(json);
+    try {
+      final decoded = convert.jsonDecode(jsonString) as Map<String, dynamic>;
+      return UserModel.fromJson(decoded);
+    } catch (e) {
+      // Retourne un utilisateur vide ou lève une exception selon votre logique
+      throw Exception('Erreur de parsing JSON utilisateur: $e');
+    }
   }
 
-  /// Convertit en JSON
+  /// Convertit en Map JSON
   @override
   Map<String, dynamic> toJson() {
     return {
@@ -56,11 +61,10 @@ class UserModel extends User {
 
   /// Convertit en chaîne JSON
   String toJsonString() {
-    return jsonEncode(toJson());
+    return convert.jsonEncode(toJson());
   }
 
   /// Copie avec modifications
-  @override
   UserModel copyWith({
     String? id,
     String? name,

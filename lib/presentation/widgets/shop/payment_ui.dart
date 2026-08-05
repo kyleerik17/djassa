@@ -4,17 +4,90 @@ import '../../../core/theme/djassa_theme.dart';
 import 'payment_launcher.dart';
 
 const List<Map<String, String>> kMobileMoneyProviders = [
-  {'label': 'Wave',         'value': 'wave',        'icon': '🌊'},
-  {'label': 'Orange Money', 'value': 'orange_money', 'icon': '🟠'},
-  {'label': 'MTN Money',    'value': 'mtn_money',    'icon': '🟡'},
-  {'label': 'Moov Money',   'value': 'moov_money',   'icon': '🔵'},
+  {'label': 'Wave',         'value': 'wave',        'icon': 'assets/icons/wave.jpg'},
+  {'label': 'Orange Money', 'value': 'orange_money', 'icon': 'assets/icons/orange_money.png'},
+  {'label': 'MTN Money',    'value': 'mtn_money',    'icon': 'assets/icons/mtn_money.png'},
+  {'label': 'Moov Money',   'value': 'moov_money',   'icon': 'assets/icons/moov_money.png'},
 ];
+
+/// Couleur de marque associée à chaque opérateur, utilisée pour le badge de
+/// secours (tant que le vrai logo n'est pas encore dans assets/icons/) et
+/// pour teinter légèrement la carte sélectionnée.
+const Map<String, Color> kMobileMoneyBrandColors = {
+  'wave': Color(0xFF1DC2E8),
+  'orange_money': Color(0xFFFF7900),
+  'mtn_money': Color(0xFFFFCC00),
+  'moov_money': Color(0xFF003DA5),
+};
 
 String paymentProviderLabel(String value) {
   for (final p in kMobileMoneyProviders) {
     if (p['value'] == value) return p['label'] ?? value;
   }
   return value;
+}
+
+Color paymentProviderColor(String value) {
+  return kMobileMoneyBrandColors[value] ?? DjassaTheme.accentOrange;
+}
+
+/// Logo de l'opérateur avec repli propre si l'asset n'existe pas encore
+/// (le fichier doit être ajouté dans assets/icons/ et déclaré dans
+/// pubspec.yaml sous flutter/assets).
+class ProviderLogo extends StatelessWidget {
+  const ProviderLogo({
+    super.key,
+    required this.provider,
+    this.size = 28,
+  });
+
+  final String provider;
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    final iconPath = kMobileMoneyProviders.firstWhere(
+      (p) => p['value'] == provider,
+      orElse: () => const {},
+    )['icon'];
+    final color = paymentProviderColor(provider);
+    final initial = paymentProviderLabel(provider).isNotEmpty
+        ? paymentProviderLabel(provider)[0]
+        : '?';
+
+    return ClipOval(
+      child: Container(
+        width: size,
+        height: size,
+        color: color.withValues(alpha: .12),
+        child: iconPath == null
+            ? Center(
+                child: Text(
+                  initial,
+                  style: TextStyle(
+                    color: color,
+                    fontWeight: FontWeight.w800,
+                    fontSize: size * .45,
+                  ),
+                ),
+              )
+            : Image.asset(
+                iconPath,
+                fit: BoxFit.cover,
+                errorBuilder: (context, error, stackTrace) => Center(
+                  child: Text(
+                    initial,
+                    style: TextStyle(
+                      color: color,
+                      fontWeight: FontWeight.w800,
+                      fontSize: size * .45,
+                    ),
+                  ),
+                ),
+              ),
+      ),
+    );
+  }
 }
 
 /// Ouvre le paiement GeniusPay via WebView.
@@ -97,39 +170,48 @@ Future<Map<String, String>?> showMobileMoneyPaymentDialog(
                 spacing: 8,
                 runSpacing: 8,
                 children: kMobileMoneyProviders.map((p) {
-                  final isSelected = selectedProvider == p['value'];
+                  final value = p['value']!;
+                  final isSelected = selectedProvider == value;
+                  final brandColor = paymentProviderColor(value);
                   return GestureDetector(
                     onTap: () =>
-                        setStateDialog(() => selectedProvider = p['value']!),
+                        setStateDialog(() => selectedProvider = value),
                     child: AnimatedContainer(
                       duration: const Duration(milliseconds: 150),
                       padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
+                        horizontal: 10,
                         vertical: 8,
                       ),
                       decoration: BoxDecoration(
                         color: isSelected
-                            ? DjassaTheme.accentOrange.withValues(alpha: .12)
+                            ? brandColor.withValues(alpha: .12)
                             : DjassaTheme.secondaryWhite,
-                        borderRadius: BorderRadius.circular(12),
+                        borderRadius: BorderRadius.circular(14),
                         border: Border.all(
                           color: isSelected
-                              ? DjassaTheme.accentOrange
+                              ? brandColor
                               : DjassaTheme.borderMedium,
                           width: isSelected ? 2 : 1,
                         ),
                       ),
-                      child: Text(
-                        '${p['icon']}  ${p['label']}',
-                        style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: isSelected
-                              ? FontWeight.w700
-                              : FontWeight.normal,
-                          color: isSelected
-                              ? DjassaTheme.accentOrange
-                              : DjassaTheme.textPrimary,
-                        ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          ProviderLogo(provider: value, size: 24),
+                          const SizedBox(width: 8),
+                          Text(
+                            p['label']!,
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: isSelected
+                                  ? FontWeight.w700
+                                  : FontWeight.normal,
+                              color: isSelected
+                                  ? brandColor
+                                  : DjassaTheme.textPrimary,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   );

@@ -100,7 +100,7 @@ class AdminProduct {
   final String? imageUrl;
   final bool isActive;
   final DateTime? createdAt;
-  final String? creatorName;      // NOUVEAU
+  final String? creatorName; // NOUVEAU
   final String? creatorAvatarUrl; // NOUVEAU
 
   factory AdminProduct.fromJson(Map<String, dynamic> json) {
@@ -126,14 +126,16 @@ class AdminProduct {
       stock: int.tryParse('${json['stock'] ?? 0}') ?? 0,
       rating: double.tryParse('${json['rating'] ?? 4.5}') ?? 4.5,
       badge: '${json['badge'] ?? 'Top'}',
-      iconName: '${json['icon_name'] ?? 'car'}',
-      imageUrl: json['image_url'] == null || '${json['image_url']}'.trim().isEmpty
-          ? null
-          : '${json['image_url']}',
+      iconName: '${json['icon_name'] ?? 'shopping_bag_rounded'}',
+      imageUrl:
+          json['image_url'] == null || '${json['image_url']}'.trim().isEmpty
+              ? null
+              : '${json['image_url']}',
       isActive: json['is_active'] == true,
       createdAt: DateTime.tryParse('${json['created_at'] ?? ''}'),
       creatorName: creator['name'] != null ? '${creator['name']}' : null,
-      creatorAvatarUrl: creator['avatar_url'] != null ? '${creator['avatar_url']}' : null,
+      creatorAvatarUrl:
+          creator['avatar_url'] != null ? '${creator['avatar_url']}' : null,
     );
   }
 }
@@ -277,12 +279,13 @@ class AdminService {
   Future<AdminProduct> createProduct(AdminProductInput input) async {
     final slug = await _uniqueSlug(input.name);
     final userId = _client.auth.currentUser?.id; // ID de l'admin connecté
-    
+
     final row = await _client
         .from('products')
         .insert({
           ...input.toJson(slug: slug),
-          if (userId != null) 'created_by': userId, // Assignation sécurisée du créateur
+          if (userId != null)
+            'created_by': userId, // Assignation sécurisée du créateur
         })
         .select('*, categories(id,name), profiles:created_by(name, avatar_url)')
         .single();

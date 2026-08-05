@@ -253,7 +253,10 @@ Deno.serve(async (req: Request) => {
     // @ts-ignore
     const webhookSecret = geniusWebhookSecret ?? Deno.env.get('GENIUSPAY_API_KEY')
     if (!webhookSecret) {
-      console.error('❌ Secret webhook manquant dans les variables d\'environnement')
+      // ✅ Ne jamais logger le NOM de la variable d'environnement manquante :
+      // ça donne une piste directe à qui a accès aux logs. Corrige le finding
+      // "Données Sensibles dans les Logs" détecté par Herozion.
+      console.error('❌ Configuration webhook invalide')
       return new Response('Webhook secret not configured', { 
         status: 500,
         headers: corsHeaders 

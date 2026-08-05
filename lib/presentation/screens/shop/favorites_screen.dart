@@ -3,30 +3,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/theme/djassa_theme.dart';
+import '../../../core/utils/constants.dart';
 import '../../providers/core_providers.dart';
 import '../../widgets/shop/shop_widgets.dart';
 import 'shop_data.dart';
-
-// ── Favorites provider ────────────────────────────────────────────────────────
-
-class FavoritesNotifier extends StateNotifier<List<ShopProduct>> {
-  FavoritesNotifier(super.initial);
-
-  void remove(ShopProduct product) {
-    state = state.where((p) => p.id != product.id).toList();
-  }
-
-  void add(ShopProduct product) {
-    if (!state.any((p) => p.id == product.id)) {
-      state = [...state, product];
-    }
-  }
-}
-
-final favoritesProvider =
-    StateNotifierProvider<FavoritesNotifier, List<ShopProduct>>((ref) {
-  return FavoritesNotifier(const []);
-});
 
 // ── Screen ────────────────────────────────────────────────────────────────────
 
@@ -40,6 +20,7 @@ class FavoritesScreen extends ConsumerWidget {
     return ShopScaffold(
       currentIndex: 3,
       title: 'Favoris',
+      showSellButton: false,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -54,7 +35,7 @@ class FavoritesScreen extends ConsumerWidget {
               title: 'Aucun favori',
               message: 'Gardez vos articles importants sous la main.',
               buttonLabel: 'Explorer',
-              onPressed: () => context.go('/search'),
+              onPressed: () => context.push(AppConstants.searchRoute),
             )
           else
             ListView.separated(
@@ -77,7 +58,6 @@ class FavoritesScreen extends ConsumerWidget {
                     trailing: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        // Bouton retirer des favoris
                         IconButton.filledTonal(
                           style: IconButton.styleFrom(
                             backgroundColor: Colors.red.withValues(alpha: .12),
@@ -93,7 +73,6 @@ class FavoritesScreen extends ConsumerWidget {
                           icon: const Icon(Icons.favorite_rounded),
                         ),
                         const SizedBox(width: 6),
-                        // Bouton ajouter au panier
                         IconButton.filledTonal(
                           style: IconButton.styleFrom(
                             backgroundColor:
@@ -103,7 +82,16 @@ class FavoritesScreen extends ConsumerWidget {
                           tooltip: 'Ajouter au panier',
                           onPressed: () {
                             ref.read(cartProvider.notifier).add(product);
-                            context.go('/cart');
+                            ScaffoldMessenger.of(context)
+                              ..hideCurrentSnackBar()
+                              ..showSnackBar(
+                                SnackBar(
+                                  content: Text(
+                                    '« ${product.name} » ajouté au panier',
+                                  ),
+                                ),
+                              );
+                            context.push(AppConstants.cartRoute);
                           },
                           icon: const Icon(Icons.add_shopping_cart_rounded),
                         ),
@@ -119,7 +107,7 @@ class FavoritesScreen extends ConsumerWidget {
             subtitle: 'Réservez maintenant les articles avec peu de stock.',
             buttonLabel: 'Voir le panier',
             icon: Icons.favorite_rounded,
-            onPressed: () => context.go('/cart'),
+            onPressed: () => context.push(AppConstants.cartRoute),
           ),
           const SizedBox(height: 88),
         ],

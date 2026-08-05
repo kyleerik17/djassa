@@ -30,6 +30,16 @@ class IconMapper {
     'trip_origin': Icons.trip_origin,
     'dashboard_customize': Icons.dashboard_customize,
     'directions_car': Icons.directions_car,
+    'shopping_bag_rounded': Icons.shopping_bag_rounded,
+    'phone_iphone_rounded': Icons.phone_iphone_rounded,
+    'kitchen_rounded': Icons.kitchen_rounded,
+    'chair_rounded': Icons.chair_rounded,
+    'child_care_rounded': Icons.child_care_rounded,
+    'local_grocery_store_rounded': Icons.local_grocery_store_rounded,
+    'menu_book_rounded': Icons.menu_book_rounded,
+    'watch_rounded': Icons.watch_rounded,
+    'pets_rounded': Icons.pets_rounded,
+    'redeem_rounded': Icons.redeem_rounded,
     // ➕ Ajoutez vos icônes ici au besoin
   };
 
@@ -43,7 +53,8 @@ class IconMapper {
   static String toIconName(IconData icon) {
     final entry = _iconMap.entries.firstWhere(
       (e) => e.value == icon,
-      orElse: () => const MapEntry('storefront_rounded', Icons.storefront_rounded),
+      orElse: () =>
+          const MapEntry('storefront_rounded', Icons.storefront_rounded),
     );
     return entry.key;
   }

@@ -9,18 +9,8 @@ import '../../providers/core_providers.dart';
 
 String formatDeliveryDate(DateTime value) {
   const months = [
-    'janvier',
-    'février',
-    'mars',
-    'avril',
-    'mai',
-    'juin',
-    'juillet',
-    'août',
-    'septembre',
-    'octobre',
-    'novembre',
-    'décembre',
+    'janvier', 'février', 'mars', 'avril', 'mai', 'juin',
+    'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre',
   ];
   final month = months[value.month - 1];
   return '${value.day} $month ${value.year} à '
@@ -240,7 +230,9 @@ class DeliveryTrackingCard extends StatelessWidget {
   }
 }
 
-class RealtimeDeliveryMap extends StatelessWidget {
+/// Carte de suivi avec animation automatique du livreur
+/// Carte de suivi avec animation automatique du livreur
+class RealtimeDeliveryMap extends StatefulWidget {
   const RealtimeDeliveryMap({
     super.key,
     required this.tracking,
@@ -251,109 +243,281 @@ class RealtimeDeliveryMap extends StatelessWidget {
   final DeliveryLiveSnapshot snapshot;
 
   @override
-  Widget build(BuildContext context) {
-    final client = snapshot.client.position;
-    final courier = snapshot.courier.position;
-    final center = LatLng(
-      (client.latitude + courier.latitude) / 2,
-      (client.longitude + courier.longitude) / 2,
+  State<RealtimeDeliveryMap> createState() => _RealtimeDeliveryMapState();
+}
+
+class _RealtimeDeliveryMapState extends State<RealtimeDeliveryMap>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late LatLng _startPoint;
+  late LatLng _endPoint;
+  late double _totalDistance;
+  late MapController _mapController;
+
+  double _distanceRemaining = 0;
+  double _speed = 0;
+  int _estimatedTime = 0;
+  bool _isDelivered = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _startPoint = widget.snapshot.courier.position;
+    _endPoint = widget.snapshot.client.position;
+    _mapController = MapController();
+
+    const distanceCalculator = Distance();
+    _totalDistance = distanceCalculator.as(LengthUnit.Meter, _startPoint, _endPoint);
+
+    if (_totalDistance < 10) {
+      _totalDistance = 500;
+    }
+
+    final durationSeconds = (_totalDistance / 15.0).clamp(5.0, 30.0);
+
+    _controller = AnimationController(
+      vsync: this,
+      duration: Duration(milliseconds: (durationSeconds * 1000).round()),
     );
 
+    _controller.addListener(() {
+      setState(() {
+        final progress = _controller.value;
+        _distanceRemaining = _totalDistance * (1 - progress);
+
+        if (_controller.isAnimating) {
+          _speed = 15.0;
+          _estimatedTime = (_distanceRemaining / _speed).round();
+        }
+      });
+    });
+
+    _controller.addStatusListener((status) {
+      if (status == AnimationStatus.completed) {
+        setState(() {
+          _isDelivered = true;
+          _distanceRemaining = 0;
+          _speed = 0;
+          _estimatedTime = 0;
+        });
+      }
+    });
+
+    _calculateInitialStats();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _controller.forward();
+    });
+  }
+
+  void _calculateInitialStats() {
+    setState(() {
+      _distanceRemaining = _totalDistance;
+      _speed = 15.0;
+      _estimatedTime = (_distanceRemaining / _speed).round();
+    });
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    _mapController.dispose();
+    super.dispose();
+  }
+
+  LatLng _getCurrentCourierPosition() {
+    final progress = _controller.value;
+    final lat = _startPoint.latitude + (_endPoint.latitude - _startPoint.latitude) * progress;
+    final lon = _startPoint.longitude + (_endPoint.longitude - _startPoint.longitude) * progress;
+    return LatLng(lat, lon);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final client = widget.snapshot.client.position;
+    final currentCourier = _getCurrentCourierPosition();
+
+    final bounds = LatLngBounds.fromPoints([_startPoint, client]);
+
     return Container(
-      height: 190,
+      height: 500, // Hauteur augmentée à 500px
       clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
         color: DjassaTheme.primaryWhite,
         borderRadius: BorderRadius.circular(24),
       ),
-      child: FlutterMap(
-        options: MapOptions(
-          initialCenter: center,
-          initialZoom: 12.4,
-          minZoom: 10,
-          maxZoom: 18,
-          interactionOptions: const InteractionOptions(
-            flags: InteractiveFlag.pinchZoom | InteractiveFlag.drag,
-          ),
-        ),
+      child: Stack(
         children: [
-          TileLayer(
-            urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-            userAgentPackageName: 'com.djassa.app',
-            retinaMode: RetinaMode.isHighDensity(context),
-          ),
-          PolylineLayer(
-            polylines: [
-              Polyline(
-                points: [courier, client],
-                color: DjassaTheme.accentOrange,
-                strokeWidth: 4,
+          FlutterMap(
+            mapController: _mapController,
+            options: MapOptions(
+              initialCameraFit: CameraFit.bounds(
+                bounds: bounds,
+                padding: const EdgeInsets.all(60),
+                forceIntegerZoomLevel: true,
               ),
-            ],
-          ),
-          MarkerLayer(
-            markers: [
-              Marker(
-                point: courier,
-                width: 112,
-                height: 74,
-                child: const _MapMarker(
-                  icon: Icons.delivery_dining_rounded,
-                  label: 'Livreur',
-                  color: DjassaTheme.accentOrange,
-                  pulse: true,
-                ),
+              minZoom: 10,
+              maxZoom: 18,
+              interactionOptions: const InteractionOptions(
+                flags: InteractiveFlag.all, // Tous les gestes activés : pinch zoom, drag, double tap, etc.
               ),
-              Marker(
-                point: client,
-                width: 112,
-                height: 74,
-                child: const _MapMarker(
-                  icon: Icons.person_pin_circle_rounded,
-                  label: 'Client',
-                  color: Colors.green,
-                ),
+            ),
+            children: [
+              TileLayer(
+                urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                userAgentPackageName: 'com.djassa.app',
+                retinaMode: RetinaMode.isHighDensity(context),
               ),
-            ],
-          ),
-          Positioned(
-            left: 12,
-            bottom: 12,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
-              decoration: BoxDecoration(
-                color: DjassaTheme.primaryWhite.withValues(alpha: .92),
-                borderRadius: BorderRadius.circular(999),
-                boxShadow: DjassaTheme.shadowLight,
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Icon(
-                    Icons.map_rounded,
-                    size: 14,
+              PolylineLayer(
+                polylines: [
+                  Polyline(
+                    points: [_startPoint, client],
                     color: DjassaTheme.accentOrange,
+                    strokeWidth: 4,
                   ),
-                  const SizedBox(width: 5),
-                  Text(
-                    'OpenStreetMap',
-                    style: TextStyle(
-                      color: DjassaTheme.primaryBlack.withValues(alpha: .72),
-                      fontSize: 11,
-                      fontWeight: FontWeight.w800,
+                ],
+              ),
+              MarkerLayer(
+                markers: [
+                  Marker(
+                    point: currentCourier,
+                    width: 112,
+                    height: 74,
+                    child: const _MapMarker(
+                      icon: Icons.delivery_dining_rounded,
+                      label: 'Livreur',
+                      color: DjassaTheme.accentOrange,
+                      pulse: true,
+                    ),
+                  ),
+                  Marker(
+                    point: client,
+                    width: 112,
+                    height: 74,
+                    child: const _MapMarker(
+                      icon: Icons.person_pin_circle_rounded,
+                      label: 'Client',
+                      color: Colors.green,
                     ),
                   ),
                 ],
               ),
-            ),
-          ),
-          const RichAttributionWidget(
-            attributions: [
-              TextSourceAttribution('OpenStreetMap contributors'),
+              Positioned(
+                left: 12,
+                top: 12,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+                  decoration: BoxDecoration(
+                    color: DjassaTheme.primaryWhite.withValues(alpha: .92),
+                    borderRadius: BorderRadius.circular(999),
+                    boxShadow: DjassaTheme.shadowLight,
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.map_rounded, size: 14, color: DjassaTheme.accentOrange),
+                      const SizedBox(width: 5),
+                      Text(
+                        'OpenStreetMap',
+                        style: TextStyle(
+                          color: DjassaTheme.primaryBlack.withValues(alpha: .72),
+                          fontSize: 11,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const RichAttributionWidget(
+                attributions: [TextSourceAttribution('OpenStreetMap contributors')],
+              ),
             ],
+          ),
+          
+          // Overlay de statistiques en temps réel
+          Positioned(
+            left: 12,
+            right: 12,
+            bottom: 12,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              decoration: BoxDecoration(
+                color: DjassaTheme.primaryWhite.withValues(alpha: .96),
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: DjassaTheme.shadowLight,
+                border: Border.all(color: DjassaTheme.borderMedium),
+              ),
+              child: _isDelivered
+                  ? const Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.verified_rounded, color: Colors.green, size: 20),
+                        SizedBox(width: 8),
+                        Text(
+                          'Livreur arrivé — Livraison en cours',
+                          style: TextStyle(
+                            color: Colors.green,
+                            fontWeight: FontWeight.w900,
+                            fontSize: 13,
+                          ),
+                        ),
+                      ],
+                    )
+                  : Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceAround,
+                      children: [
+                        _StatItem(
+                          label: 'Distance',
+                          value: '${_distanceRemaining.toStringAsFixed(0)} m',
+                        ),
+                        _StatItem(
+                          label: 'Temps',
+                          value: '$_estimatedTime s',
+                        ),
+                        _StatItem(
+                          label: 'Vitesse',
+                          value: '${(_speed * 3.6).toStringAsFixed(1)} km/h',
+                        ),
+                      ],
+                    ),
+            ),
           ),
         ],
       ),
+    );
+  }
+}
+
+/// Widget utilitaire pour afficher une statistique dans l'overlay
+class _StatItem extends StatelessWidget {
+  final String label;
+  final String value;
+
+  const _StatItem({required this.label, required this.value});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          value,
+          style: const TextStyle(
+            fontWeight: FontWeight.w900,
+            fontSize: 14,
+            color: DjassaTheme.primaryBlack,
+          ),
+        ),
+        const SizedBox(height: 2),
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 10,
+            color: DjassaTheme.primaryBlack.withValues(alpha: .6),
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ],
     );
   }
 }
@@ -387,10 +551,7 @@ class _MapMarker extends StatelessWidget {
           ),
         ],
       ),
-      child: Icon(
-        icon,
-        color: Colors.white,
-      ),
+      child: Icon(icon, color: Colors.white),
     );
 
     return Column(
@@ -398,8 +559,7 @@ class _MapMarker extends StatelessWidget {
       children: [
         pulse
             ? iconWidget
-                .animate(
-                    onPlay: (controller) => controller.repeat(reverse: true))
+                .animate(onPlay: (controller) => controller.repeat(reverse: true))
                 .scale(
                   begin: const Offset(.92, .92),
                   end: const Offset(1.08, 1.08),
@@ -502,7 +662,7 @@ class DeliveryFlowInfoCard extends StatelessWidget {
       (
         icon: Icons.inventory_2_rounded,
         title: 'Préparation boutique',
-        text: 'L’équipe vérifie le paiement, rassemble les pièces et emballe.',
+        text: "L'équipe vérifie le paiement, rassemble les pièces et emballe.",
       ),
       (
         icon: Icons.delivery_dining_rounded,
@@ -672,7 +832,7 @@ _StageContent _stageContent(
         color: DjassaTheme.accentOrange,
         title: 'Commande créée',
         message:
-            'Votre commande ${tracking.orderNumber} est enregistrée. Après paiement, l’équipe prépare les articles puis assigne un livreur.',
+            "Votre commande ${tracking.orderNumber} est enregistrée. Après paiement, l'équipe prépare les articles puis assigne un livreur.",
       );
     case DeliveryTrackingStage.scheduled:
       return _StageContent(
@@ -696,7 +856,7 @@ _StageContent _stageContent(
         color: Colors.green,
         title: 'Commande livrée',
         message:
-            'Merci pour votre achat. La carte de suivi disparaît maintenant de l’accueil.',
+            "Merci pour votre achat. La carte de suivi disparaît maintenant de l'accueil.",
       );
   }
 }
