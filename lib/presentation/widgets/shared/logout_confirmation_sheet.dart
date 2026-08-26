@@ -46,14 +46,14 @@ class _LogoutConfirmationSheetState extends State<_LogoutConfirmationSheet>
     super.initState();
     _controller = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 340),
+      duration: DjassaMotion.normal,
     );
-    _fade = CurvedAnimation(parent: _controller, curve: Curves.easeOut);
+    _fade = CurvedAnimation(parent: _controller, curve: DjassaMotion.entrance);
     _slide = Tween<Offset>(
       begin: const Offset(0, 0.12),
       end: Offset.zero,
     ).animate(
-      CurvedAnimation(parent: _controller, curve: Curves.easeOutCubic),
+      CurvedAnimation(parent: _controller, curve: DjassaMotion.emphasized),
     );
     _controller.forward();
   }

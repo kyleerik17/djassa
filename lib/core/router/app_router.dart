@@ -1,4 +1,4 @@
-﻿import 'package:djassa/presentation/screens/auth/ForgotPasswordScreen.dart';
+import 'package:djassa/presentation/screens/auth/ForgotPasswordScreen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -102,7 +102,6 @@ class AppRouter {
           name: 'forgot-password',
           child: const ForgotPasswordScreen(),
         ),
-
         _route(
           path: AppConstants.onboardingRoute,
           name: 'onboarding',
@@ -314,19 +313,19 @@ class AppRouter {
       key: state.pageKey,
       name: state.name,
       arguments: state.extra,
-      transitionDuration: const Duration(milliseconds: 320),
-      reverseTransitionDuration: const Duration(milliseconds: 240),
+      transitionDuration: DjassaMotion.routeForward,
+      reverseTransitionDuration: DjassaMotion.routeReverse,
       child: child,
       transitionsBuilder: (context, animation, secondaryAnimation, child) {
         final curvedAnimation = CurvedAnimation(
           parent: animation,
-          curve: Curves.easeOutCubic,
-          reverseCurve: Curves.easeInCubic,
+          curve: DjassaMotion.emphasized,
+          reverseCurve: DjassaMotion.exit,
         );
         final secondaryCurve = CurvedAnimation(
           parent: secondaryAnimation,
-          curve: Curves.easeOutCubic,
-          reverseCurve: Curves.easeInCubic,
+          curve: DjassaMotion.entrance,
+          reverseCurve: DjassaMotion.exit,
         );
 
         return FadeTransition(
@@ -337,13 +336,13 @@ class AppRouter {
               end: Offset.zero,
             ).animate(curvedAnimation),
             child: ScaleTransition(
-              scale: Tween<double>(begin: .985, end: 1).animate(
+              scale: Tween<double>(begin: .992, end: 1).animate(
                 curvedAnimation,
               ),
               child: SlideTransition(
                 position: Tween<Offset>(
                   begin: Offset.zero,
-                  end: const Offset(-.015, 0),
+                  end: const Offset(-.01, 0),
                 ).animate(secondaryCurve),
                 child: child,
               ),
@@ -370,6 +369,6 @@ class AppRouter {
         path == AppConstants.adminRoute) {
       return const Offset(0, .045);
     }
-    return const Offset(.035, .01);
+    return const Offset(.025, .006);
   }
 }

@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
 import 'package:sizer/sizer.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -32,12 +31,12 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen>
     super.initState();
     _animationController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 800),
+      duration: DjassaMotion.slow,
     );
 
     _fadeAnimation = CurvedAnimation(
       parent: _animationController,
-      curve: Curves.easeOut,
+      curve: DjassaMotion.entrance,
     );
 
     _slideAnimation = Tween<Offset>(
@@ -45,7 +44,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen>
       end: Offset.zero,
     ).animate(CurvedAnimation(
       parent: _animationController,
-      curve: Curves.easeOutCubic,
+      curve: DjassaMotion.emphasized,
     ));
 
     _animationController.forward();
@@ -139,7 +138,8 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen>
             content: const Text('Email renvoyé avec succès.'),
             backgroundColor: DjassaTheme.accentGreen,
             behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            shape:
+                RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
           ),
         );
       }
@@ -172,7 +172,8 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen>
             Positioned(
               top: -10.h,
               right: -15.w,
-              child: BlurHashCircle(color: DjassaTheme.accentOrange, size: 50.w),
+              child:
+                  BlurHashCircle(color: DjassaTheme.accentOrange, size: 50.w),
             ),
             Positioned(
               bottom: -10.h,
@@ -191,7 +192,8 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen>
                       children: [
                         TweenAnimationBuilder<double>(
                           tween: Tween(begin: 0.0, end: 1.0),
-                          duration: const Duration(milliseconds: 600),
+                          duration: DjassaMotion.slow,
+                          curve: DjassaMotion.emphasized,
                           builder: (_, value, child) {
                             return Transform.scale(
                               scale: 0.8 + (0.2 * value),
@@ -218,8 +220,11 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen>
                         ),
                         SizedBox(height: 3.h),
                         AnimatedSwitcher(
-                          duration: const Duration(milliseconds: 350),
-                          transitionBuilder: (child, animation) => FadeTransition(
+                          duration: DjassaMotion.normal,
+                          switchInCurve: DjassaMotion.emphasized,
+                          switchOutCurve: DjassaMotion.exit,
+                          transitionBuilder: (child, animation) =>
+                              FadeTransition(
                             opacity: animation,
                             child: SlideTransition(
                               position: Tween<Offset>(
@@ -244,7 +249,9 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen>
                                 )
                               ],
                             ),
-                            child: _isSuccess ? _buildSuccessView() : _buildFormView(),
+                            child: _isSuccess
+                                ? _buildSuccessView()
+                                : _buildFormView(),
                           ),
                         ),
                         SizedBox(height: 2.5.h),
@@ -283,12 +290,15 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen>
           Text(
             'Mot de passe oublié ?',
             style: TextStyle(
-                color: Colors.black87, fontSize: 6.w, fontWeight: FontWeight.w900),
+                color: Colors.black87,
+                fontSize: 6.w,
+                fontWeight: FontWeight.w900),
           ),
           SizedBox(height: 1.5.h),
           Text(
             'Entrez votre email associé à votre compte pour recevoir un lien de réinitialisation.',
-            style: TextStyle(color: Colors.grey.shade600, fontSize: 3.5.w, height: 1.4),
+            style: TextStyle(
+                color: Colors.grey.shade600, fontSize: 3.5.w, height: 1.4),
           ),
           SizedBox(height: 3.h),
           _AnimatedTextField(
@@ -299,9 +309,13 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen>
             keyboardType: TextInputType.emailAddress,
             enabled: !_isSubmitting,
             validator: (value) {
-              if (value == null || value.trim().isEmpty) return 'Ce champ est requis';
+              if (value == null || value.trim().isEmpty) {
+                return 'Ce champ est requis';
+              }
               final v = value.trim();
-              if (!_isEmail(v) && !_isPhone(v)) return 'Format invalide';
+              if (!_isEmail(v) && !_isPhone(v)) {
+                return 'Format invalide';
+              }
               return null;
             },
           ),
@@ -316,7 +330,8 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen>
           ),
           SizedBox(height: 2.h),
           AnimatedContainer(
-            duration: const Duration(milliseconds: 300),
+            duration: DjassaMotion.fast,
+            curve: DjassaMotion.emphasized,
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(2.5.w),
               boxShadow: _isSubmitting
@@ -334,15 +349,19 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen>
                 backgroundColor: DjassaTheme.accentOrange,
                 foregroundColor: Colors.white,
                 padding: EdgeInsets.symmetric(vertical: 1.5.h),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(2.5.w)),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(2.5.w)),
               ),
               onPressed: _isSubmitting ? null : _handleResetRequest,
               child: _isSubmitting
                   ? SizedBox(
                       width: 5.w,
                       height: 5.w,
-                      child: const CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                  : Text('Envoyer le lien', style: TextStyle(fontSize: 4.2.w, fontWeight: FontWeight.w800)),
+                      child: const CircularProgressIndicator(
+                          color: Colors.white, strokeWidth: 2))
+                  : Text('Envoyer le lien',
+                      style: TextStyle(
+                          fontSize: 4.2.w, fontWeight: FontWeight.w800)),
             ),
           ),
         ],
@@ -360,30 +379,37 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen>
             color: DjassaTheme.accentGreen.withOpacity(0.1),
             shape: BoxShape.circle,
           ),
-          child: Icon(Icons.check_circle_rounded, color: DjassaTheme.accentGreen, size: 15.w),
+          child: Icon(Icons.check_circle_rounded,
+              color: DjassaTheme.accentGreen, size: 15.w),
         ),
         SizedBox(height: 2.h),
         Text(
           'Vérifiez votre boîte !',
           textAlign: TextAlign.center,
-          style: TextStyle(color: Colors.black87, fontSize: 6.w, fontWeight: FontWeight.w900),
+          style: TextStyle(
+              color: Colors.black87,
+              fontSize: 6.w,
+              fontWeight: FontWeight.w900),
         ),
         SizedBox(height: 1.5.h),
         Text(
           'Nous avons envoyé les instructions de réinitialisation à :\n$_maskedEmail',
           textAlign: TextAlign.center,
-          style: TextStyle(color: Colors.grey.shade600, fontSize: 3.5.w, height: 1.4),
+          style: TextStyle(
+              color: Colors.grey.shade600, fontSize: 3.5.w, height: 1.4),
         ),
         SizedBox(height: 3.h),
         OutlinedButton(
           style: OutlinedButton.styleFrom(
             foregroundColor: DjassaTheme.accentOrange,
-            side: BorderSide(color: DjassaTheme.accentOrange),
+            side: const BorderSide(color: DjassaTheme.accentOrange),
             padding: EdgeInsets.symmetric(vertical: 1.5.h),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(2.5.w)),
+            shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(2.5.w)),
           ),
           onPressed: _isSubmitting ? null : _handleResend,
-          child: Text('Renvoyer', style: TextStyle(fontSize: 3.8.w, fontWeight: FontWeight.w700)),
+          child: Text('Renvoyer',
+              style: TextStyle(fontSize: 3.8.w, fontWeight: FontWeight.w700)),
         ),
       ],
     );
@@ -424,7 +450,8 @@ class _AnimatedTextField extends StatelessWidget {
       obscureText: obscureText,
       keyboardType: keyboardType,
       enabled: enabled,
-      style: TextStyle(fontWeight: FontWeight.w600, fontSize: 3.5.w, color: Colors.black87),
+      style: TextStyle(
+          fontWeight: FontWeight.w600, fontSize: 3.5.w, color: Colors.black87),
       decoration: InputDecoration(
         labelText: label,
         hintText: hint,
@@ -432,11 +459,16 @@ class _AnimatedTextField extends StatelessWidget {
         suffixIcon: suffixIcon,
         filled: true,
         fillColor: const Color(0xFFF5F5F7),
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(2.5.w), borderSide: BorderSide.none),
-        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(2.5.w), borderSide: BorderSide.none),
+        border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(2.5.w),
+            borderSide: BorderSide.none),
+        enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(2.5.w),
+            borderSide: BorderSide.none),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(2.5.w),
-          borderSide: const BorderSide(color: DjassaTheme.accentOrange, width: 2),
+          borderSide:
+              const BorderSide(color: DjassaTheme.accentOrange, width: 2),
         ),
         errorBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(2.5.w),

@@ -586,7 +586,8 @@ class _ProSearchBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return AnimatedContainer(
-      duration: const Duration(milliseconds: 200),
+      duration: DjassaMotion.fast,
+      curve: DjassaMotion.emphasized,
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
       decoration: BoxDecoration(
         color: focused
@@ -702,7 +703,8 @@ class _Chip extends StatelessWidget {
       borderRadius: BorderRadius.circular(999),
       onTap: onTap,
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 150),
+        duration: DjassaMotion.fast,
+        curve: DjassaMotion.emphasized,
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
         decoration: BoxDecoration(
           color: selected ? DjassaTheme.primaryBlack : DjassaTheme.primaryWhite,
@@ -797,8 +799,8 @@ class _StaggeredEntry extends StatelessWidget {
   Widget build(BuildContext context) {
     return TweenAnimationBuilder<double>(
         tween: Tween(begin: 0, end: 1),
-        duration: Duration(milliseconds: 200 + (index.clamp(0, 6) * 40)),
-        curve: Curves.easeOutCubic,
+        duration: Duration(milliseconds: 220 + (index.clamp(0, 6) * 32)),
+        curve: DjassaMotion.emphasized,
         builder: (_, v, c) => Opacity(
             opacity: v,
             child:

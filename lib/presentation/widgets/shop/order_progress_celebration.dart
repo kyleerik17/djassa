@@ -17,7 +17,7 @@ Future<void> showOrderProgressCelebration(
     barrierDismissible: true,
     barrierLabel: 'Fermer',
     barrierColor: Colors.black.withValues(alpha: .55),
-    transitionDuration: const Duration(milliseconds: 420),
+    transitionDuration: DjassaMotion.normal,
     pageBuilder: (context, _, __) => Center(
       child: Material(
         color: Colors.transparent,
@@ -41,12 +41,11 @@ Future<void> showOrderProgressCelebration(
                   border: Border.all(color: info.color, width: 2),
                 ),
                 child: Icon(info.icon, size: 48, color: info.color),
-              )
-                  .animate(onPlay: (c) => c.repeat(reverse: true))
-                  .scale(
+              ).animate(onPlay: (c) => c.repeat(reverse: true)).scale(
                     begin: const Offset(0.92, 0.92),
-                    end: const Offset(1.06, 1.06),
-                    duration: 900.ms,
+                    end: const Offset(1.04, 1.04),
+                    duration: 1200.ms,
+                    curve: DjassaMotion.soft,
                   ),
               const SizedBox(height: 20),
               Text(
@@ -60,7 +59,7 @@ Future<void> showOrderProgressCelebration(
               Text(
                 info.subtitle,
                 textAlign: TextAlign.center,
-                style: TextStyle(
+                style: const TextStyle(
                   color: DjassaTheme.textSecondary,
                   height: 1.45,
                 ),
@@ -88,11 +87,15 @@ Future<void> showOrderProgressCelebration(
     transitionBuilder: (context, animation, _, child) {
       final curved = CurvedAnimation(
         parent: animation,
-        curve: Curves.easeOutBack,
+        curve: DjassaMotion.emphasized,
+        reverseCurve: DjassaMotion.exit,
       );
       return FadeTransition(
         opacity: animation,
-        child: ScaleTransition(scale: curved, child: child),
+        child: ScaleTransition(
+          scale: Tween<double>(begin: .94, end: 1).animate(curved),
+          child: child,
+        ),
       );
     },
   );

@@ -23,37 +23,45 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
   static const List<_OnboardingPageData> _pages = [
     _OnboardingPageData(
       // Image générique e-commerce propre
-      imageUrl: 'https://images.unsplash.com/photo-1607082348824-0a96f2a4b9da?w=800&q=80',
+      imageUrl:
+          'https://images.unsplash.com/photo-1607082348824-0a96f2a4b9da?w=800&q=80',
       badge: 'Catalogue Illimité',
       title: 'Tout ce dont vous avez besoin',
-      subtitle: 'Mode, high-tech, maison... Explorez des milliers de produits vérifiés et sélectionnés pour vous.',
+      subtitle:
+          'Mode, high-tech, maison... Explorez des milliers de produits vérifiés et sélectionnés pour vous.',
       icon: Icons.shopping_bag_rounded,
       accentColor: DjassaTheme.accentOrange,
     ),
     _OnboardingPageData(
       // Image livraison/professionnel
-      imageUrl: 'https://images.unsplash.com/photo-1556740758-90de374c12ad?w=800&q=80',
+      imageUrl:
+          'https://images.unsplash.com/photo-1556740758-90de374c12ad?w=800&q=80',
       badge: 'Simplicité Absolue',
       title: 'Commandez en un clin d\'œil',
-      subtitle: 'Vos adresses et paiements sont sauvegardés. Plus jamais de formulaires interminables à remplir.',
+      subtitle:
+          'Vos adresses et paiements sont sauvegardés. Plus jamais de formulaires interminables à remplir.',
       icon: Icons.flash_on_rounded,
       accentColor: Colors.blueAccent,
     ),
     _OnboardingPageData(
       // Image qualité/colis
-      imageUrl: 'https://images.unsplash.com/photo-1580674285054-bed31e145f59?w=800&q=80',
+      imageUrl:
+          'https://images.unsplash.com/photo-1580674285054-bed31e145f59?w=800&q=80',
       badge: 'Qualité Garantie',
       title: 'Emballé avec soin',
-      subtitle: 'Chaque commande passe par un contrôle rigoureux avant d\'être confiée à nos livreurs partenaires.',
+      subtitle:
+          'Chaque commande passe par un contrôle rigoureux avant d\'être confiée à nos livreurs partenaires.',
       icon: Icons.verified_user_rounded,
       accentColor: Colors.green,
     ),
     _OnboardingPageData(
       // Image tracking/map
-      imageUrl: 'https://images.unsplash.com/photo-1566576912321-d58ddd7a6088?w=800&q=80',
+      imageUrl:
+          'https://images.unsplash.com/photo-1566576912321-d58ddd7a6088?w=800&q=80',
       badge: 'Suivi en Temps Réel',
       title: 'Votre colis, sous vos yeux',
-      subtitle: 'Suivez votre livreur sur la carte en direct. Recevez des notifications à chaque étape clé.',
+      subtitle:
+          'Suivez votre livreur sur la carte en direct. Recevez des notifications à chaque étape clé.',
       icon: Icons.location_on_rounded,
       accentColor: Colors.deepPurple,
     ),
@@ -62,10 +70,10 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
   Future<void> _finish() async {
     if (_isAnimating) return;
     _isAnimating = true;
-    
+
     try {
       await ref.read(sharedPreferencesProvider).setBool(
-            AppConstants.onboardingCompleteKey, 
+            AppConstants.onboardingCompleteKey,
             true,
           );
       if (mounted) context.go(AppConstants.loginRoute);
@@ -77,8 +85,8 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
   void _nextPage() {
     if (_index < _pages.length - 1) {
       _controller.nextPage(
-        duration: const Duration(milliseconds: 400),
-        curve: Curves.easeOutCubic,
+        duration: DjassaMotion.normal,
+        curve: DjassaMotion.emphasized,
       );
     } else {
       _finish();
@@ -131,13 +139,14 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                         ),
                       ),
                     ],
-                  ).animate().fadeIn(duration: 600.ms),
-                  
+                  ).animate().fadeIn(duration: DjassaMotion.slow),
+
                   // Bouton Passer
                   TextButton(
                     onPressed: _finish,
                     style: TextButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 8),
                     ),
                     child: Text(
                       'Passer',
@@ -147,7 +156,9 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                         fontSize: 14,
                       ),
                     ),
-                  ).animate().fadeIn(duration: 600.ms, delay: 200.ms),
+                  )
+                      .animate()
+                      .fadeIn(duration: DjassaMotion.slow, delay: 120.ms),
                 ],
               ),
             ),
@@ -180,7 +191,8 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                     children: List.generate(
                       _pages.length,
                       (i) => AnimatedContainer(
-                        duration: const Duration(milliseconds: 300),
+                        duration: DjassaMotion.fast,
+                        curve: DjassaMotion.emphasized,
                         width: _index == i ? 24 : 8,
                         height: 8,
                         margin: const EdgeInsets.symmetric(horizontal: 4),
@@ -193,7 +205,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                       ),
                     ),
                   ),
-                  
+
                   const SizedBox(height: 24),
 
                   // Bouton d'action principal
@@ -212,7 +224,9 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                       ),
                       onPressed: _nextPage,
                       icon: Icon(
-                        isLast ? Icons.check_rounded : Icons.arrow_forward_rounded,
+                        isLast
+                            ? Icons.check_rounded
+                            : Icons.arrow_forward_rounded,
                         size: 20,
                       ),
                       label: Text(
@@ -223,7 +237,15 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                         ),
                       ),
                     ),
-                  ).animate().scale(delay: 400.ms, duration: 400.ms, curve: Curves.elasticOut),
+                  )
+                      .animate()
+                      .fadeIn(delay: 180.ms, duration: DjassaMotion.normal)
+                      .scale(
+                        begin: const Offset(.96, .96),
+                        delay: 180.ms,
+                        duration: DjassaMotion.normal,
+                        curve: DjassaMotion.emphasized,
+                      ),
                 ],
               ),
             ),
@@ -277,7 +299,8 @@ class _OnboardingPage extends StatelessWidget {
                         child: Center(
                           child: CircularProgressIndicator(
                             value: progress.expectedTotalBytes != null
-                                ? progress.cumulativeBytesLoaded / progress.expectedTotalBytes!
+                                ? progress.cumulativeBytesLoaded /
+                                    progress.expectedTotalBytes!
                                 : null,
                             color: data.accentColor,
                           ),
@@ -286,7 +309,8 @@ class _OnboardingPage extends StatelessWidget {
                     },
                     errorBuilder: (_, __, ___) => Container(
                       color: Colors.grey.shade200,
-                      child: Icon(data.icon, size: 80, color: Colors.grey.shade400),
+                      child: Icon(data.icon,
+                          size: 80, color: Colors.grey.shade400),
                     ),
                   ),
 
@@ -314,11 +338,13 @@ class _OnboardingPage extends StatelessWidget {
                       children: [
                         // Badge Glassmorphism
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 12, vertical: 6),
                           decoration: BoxDecoration(
                             color: Colors.white.withOpacity(0.2),
                             borderRadius: BorderRadius.circular(20),
-                            border: Border.all(color: Colors.white.withOpacity(0.3)),
+                            border: Border.all(
+                                color: Colors.white.withOpacity(0.3)),
                           ),
                           child: Text(
                             data.badge,
@@ -329,7 +355,7 @@ class _OnboardingPage extends StatelessWidget {
                             ),
                           ),
                         ),
-                        
+
                         // Icone principale dans un cercle
                         Container(
                           padding: const EdgeInsets.all(12),
@@ -343,7 +369,8 @@ class _OnboardingPage extends StatelessWidget {
                               ),
                             ],
                           ),
-                          child: Icon(data.icon, color: data.accentColor, size: 28),
+                          child: Icon(data.icon,
+                              color: data.accentColor, size: 28),
                         ),
                       ],
                     ),
@@ -352,9 +379,14 @@ class _OnboardingPage extends StatelessWidget {
               ),
             ),
           )
-          .animate(target: isActive ? 1 : 0)
-          .fadeIn(duration: 600.ms)
-          .slideX(begin: 0.2, end: 0, duration: 600.ms, curve: Curves.easeOutCubic),
+              .animate(target: isActive ? 1 : 0)
+              .fadeIn(duration: DjassaMotion.slow)
+              .slideX(
+                begin: 0.12,
+                end: 0,
+                duration: DjassaMotion.slow,
+                curve: DjassaMotion.emphasized,
+              ),
 
           const SizedBox(height: 32),
 
@@ -368,9 +400,14 @@ class _OnboardingPage extends StatelessWidget {
                   height: 1.2,
                 ),
           )
-          .animate(target: isActive ? 1 : 0)
-          .fadeIn(delay: 200.ms, duration: 500.ms)
-          .slideY(begin: 0.2, end: 0, duration: 500.ms),
+              .animate(target: isActive ? 1 : 0)
+              .fadeIn(delay: 120.ms, duration: DjassaMotion.normal)
+              .slideY(
+                begin: 0.12,
+                end: 0,
+                duration: DjassaMotion.normal,
+                curve: DjassaMotion.emphasized,
+              ),
 
           const SizedBox(height: 16),
 
@@ -383,9 +420,14 @@ class _OnboardingPage extends StatelessWidget {
                   fontSize: 16,
                 ),
           )
-          .animate(target: isActive ? 1 : 0)
-          .fadeIn(delay: 300.ms, duration: 500.ms)
-          .slideY(begin: 0.2, end: 0, duration: 500.ms),
+              .animate(target: isActive ? 1 : 0)
+              .fadeIn(delay: 180.ms, duration: DjassaMotion.normal)
+              .slideY(
+                begin: 0.1,
+                end: 0,
+                duration: DjassaMotion.normal,
+                curve: DjassaMotion.emphasized,
+              ),
         ],
       ),
     );

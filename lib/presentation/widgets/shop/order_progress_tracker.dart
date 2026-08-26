@@ -36,7 +36,7 @@ class _OrderProgressTrackerState extends ConsumerState<OrderProgressTracker>
     super.initState();
     _pulseController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 1400),
+      duration: const Duration(milliseconds: 1800),
     )..repeat(reverse: true);
   }
 
@@ -57,7 +57,8 @@ class _OrderProgressTrackerState extends ConsumerState<OrderProgressTracker>
 
   @override
   Widget build(BuildContext context) {
-    final rawIndex = OrderProgressInfo.progressIndexFromStatus(widget.order.status);
+    final rawIndex =
+        OrderProgressInfo.progressIndexFromStatus(widget.order.status);
     final currentIndex = rawIndex < 0 ? 0 : rawIndex;
     final current = OrderProgressStep.values[currentIndex.clamp(0, 3)];
     final currentInfo = OrderProgressInfo.forStep(current);
@@ -92,11 +93,10 @@ class _OrderProgressTrackerState extends ConsumerState<OrderProgressTracker>
                     const SizedBox(height: 4),
                     Text(
                       widget.order.orderNumber,
-                      style:
-                          Theme.of(context).textTheme.titleLarge?.copyWith(
-                                color: DjassaTheme.primaryWhite,
-                                fontWeight: FontWeight.w900,
-                              ),
+                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                            color: DjassaTheme.primaryWhite,
+                            fontWeight: FontWeight.w900,
+                          ),
                     ),
                   ],
                 ),
@@ -130,15 +130,14 @@ class _OrderProgressTrackerState extends ConsumerState<OrderProgressTracker>
           ),
           if (!widget.compact &&
               currentIndex >=
-                  OrderProgressInfo.stepIndex(OrderProgressStep.delivering)) ...[
+                  OrderProgressInfo.stepIndex(
+                      OrderProgressStep.delivering)) ...[
             const SizedBox(height: 16),
             _OrderLiveMap(order: widget.order),
           ],
           const SizedBox(height: 20),
           _AnimatedProgressBar(
-            progress: waitingCourier
-                ? 0.08
-                : (currentIndex + 1) / steps.length,
+            progress: waitingCourier ? 0.08 : (currentIndex + 1) / steps.length,
           ),
           const SizedBox(height: 18),
           ...List.generate(steps.length, (index) {
@@ -183,8 +182,8 @@ class _OrderProgressTrackerState extends ConsumerState<OrderProgressTracker>
       ),
     )
         .animate()
-        .fadeIn(duration: 420.ms)
-        .slideY(begin: 0.06, end: 0, curve: Curves.easeOutCubic);
+        .fadeIn(duration: DjassaMotion.normal)
+        .slideY(begin: 0.04, end: 0, curve: DjassaMotion.emphasized);
   }
 }
 
@@ -202,7 +201,7 @@ class _HeroStepIcon extends StatelessWidget {
     return AnimatedBuilder(
       animation: pulse,
       builder: (context, child) {
-        final scale = 1.0 + (pulse.value * 0.08);
+        final scale = 1.0 + (pulse.value * 0.045);
         return Transform.scale(scale: scale, child: child);
       },
       child: Container(
@@ -211,7 +210,8 @@ class _HeroStepIcon extends StatelessWidget {
         decoration: BoxDecoration(
           shape: BoxShape.circle,
           color: info.color.withValues(alpha: .18),
-          border: Border.all(color: info.color.withValues(alpha: .45), width: 2),
+          border:
+              Border.all(color: info.color.withValues(alpha: .45), width: 2),
           boxShadow: [
             BoxShadow(
               color: info.color.withValues(alpha: .35),
@@ -239,13 +239,12 @@ class _AnimatedProgressBar extends StatelessWidget {
         height: 8,
         child: TweenAnimationBuilder<double>(
           tween: Tween(begin: 0, end: progress.clamp(0.0, 1.0)),
-          duration: const Duration(milliseconds: 700),
-          curve: Curves.easeOutCubic,
+          duration: DjassaMotion.slow,
+          curve: DjassaMotion.emphasized,
           builder: (context, value, _) => LinearProgressIndicator(
             value: value,
             backgroundColor: DjassaTheme.primaryWhite.withValues(alpha: .12),
-            valueColor:
-                const AlwaysStoppedAnimation(DjassaTheme.accentOrange),
+            valueColor: const AlwaysStoppedAnimation(DjassaTheme.accentOrange),
             minHeight: 8,
           ),
         ),
@@ -273,8 +272,7 @@ class _TimelineStepRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final isDone = state == _StepVisualState.done;
     final isActive = state == _StepVisualState.active;
-    final dotColor =
-        isDone || isActive ? step.color : DjassaTheme.borderMedium;
+    final dotColor = isDone || isActive ? step.color : DjassaTheme.borderMedium;
 
     Widget row = Row(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -282,13 +280,15 @@ class _TimelineStepRow extends StatelessWidget {
         Column(
           children: [
             AnimatedContainer(
-              duration: const Duration(milliseconds: 400),
+              duration: DjassaMotion.normal,
+              curve: DjassaMotion.emphasized,
               width: isActive ? 40 : 32,
               height: isActive ? 40 : 32,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 color: dotColor.withValues(alpha: isActive ? .22 : .14),
-                border: Border.all(color: dotColor, width: isActive ? 2.5 : 1.5),
+                border:
+                    Border.all(color: dotColor, width: isActive ? 2.5 : 1.5),
               ),
               child: Icon(
                 isDone ? Icons.check_rounded : step.icon,
@@ -344,8 +344,8 @@ class _TimelineStepRow extends StatelessWidget {
     if (animateIn) {
       row = row
           .animate()
-          .fadeIn(duration: 380.ms)
-          .slideX(begin: 0.04, end: 0, curve: Curves.easeOutCubic);
+          .fadeIn(duration: DjassaMotion.normal)
+          .slideX(begin: 0.025, end: 0, curve: DjassaMotion.emphasized);
     }
     return Padding(padding: const EdgeInsets.only(bottom: 4), child: row);
   }

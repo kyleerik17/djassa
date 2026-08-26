@@ -1,15 +1,16 @@
 // ignore_for_file: deprecated_member_use
 
+import 'dart:ui'; // Pour BackdropFilter (effet de flou)
 import 'package:djassa/data/models/user_model.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:sizer/sizer.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+// import 'package:font_awesome_flutter/font_awesome_flutter.dart'; // Recommandé pour les vrais logos
 
 import '../../../core/router/app_navigation.dart';
 import '../../../core/theme/djassa_theme.dart';
-import '../../../core/utils/constants.dart';
 import '../../../core/utils/user_role.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/core_providers.dart';
@@ -21,15 +22,15 @@ class LoginScreen extends ConsumerStatefulWidget {
   ConsumerState<LoginScreen> createState() => _LoginScreenState();
 }
 
-class _LoginScreenState extends ConsumerState<LoginScreen> with SingleTickerProviderStateMixin {
+class _LoginScreenState extends ConsumerState<LoginScreen>
+    with SingleTickerProviderStateMixin {
   final _formKey = GlobalKey<FormState>();
   final _identifierController = TextEditingController();
   final _passwordController = TextEditingController();
   bool _obscurePassword = true;
   bool _isSocialLoading = false;
   bool _isSubmitting = false;
-  
-  // Animation Controller pour les effets d'entrée
+
   late AnimationController _animationController;
   late Animation<double> _fadeAnimation;
   late Animation<Offset> _slideAnimation;
@@ -39,21 +40,15 @@ class _LoginScreenState extends ConsumerState<LoginScreen> with SingleTickerProv
     super.initState();
     _animationController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 800),
+      duration: DjassaMotion.slow,
     );
 
     _fadeAnimation = CurvedAnimation(
-      parent: _animationController,
-      curve: Curves.easeOut,
-    );
-
-    _slideAnimation = Tween<Offset>(
-      begin: const Offset(0, 0.1),
-      end: Offset.zero,
-    ).animate(CurvedAnimation(
-      parent: _animationController,
-      curve: Curves.easeOutCubic,
-    ));
+        parent: _animationController, curve: DjassaMotion.emphasized);
+    _slideAnimation =
+        Tween<Offset>(begin: const Offset(0, 0.08), end: Offset.zero).animate(
+            CurvedAnimation(
+                parent: _animationController, curve: DjassaMotion.emphasized));
 
     _animationController.forward();
   }
@@ -66,22 +61,22 @@ class _LoginScreenState extends ConsumerState<LoginScreen> with SingleTickerProv
     super.dispose();
   }
 
-  bool _isPhone(String value) {
-    final phoneRegex = RegExp(r'^\+?[0-9]{8,15}$');
-    return phoneRegex.hasMatch(value.replaceAll(' ', ''));
-  }
+  bool _isPhone(String value) =>
+      RegExp(r'^\+?[0-9]{8,15}$').hasMatch(value.replaceAll(' ', ''));
+  bool _isEmail(String value) =>
+      RegExp(r'^[^@]+@[^@]+\.[^@]+$').hasMatch(value);
 
-  bool _isEmail(String value) {
-    final emailRegex = RegExp(r'^[^@]+@[^@]+\.[^@]+$');
-    return emailRegex.hasMatch(value);
-  }
-
-  UserModel _convertSupabaseUserToModel(User? supabaseUser, {Map<String, dynamic>? extraData}) {
+  UserModel _convertSupabaseUserToModel(User? supabaseUser,
+      {Map<String, dynamic>? extraData}) {
     if (supabaseUser == null) {
       return UserModel(
-        id: '', name: 'Inconnu', surname: '', phone: '', 
-        email: null, role: 'client', createdAt: DateTime.now(),
-      );
+          id: '',
+          name: 'Inconnu',
+          surname: '',
+          phone: '',
+          email: null,
+          role: 'client',
+          createdAt: DateTime.now());
     }
     final metadata = supabaseUser.userMetadata ?? {};
     return UserModel(
@@ -99,14 +94,12 @@ class _LoginScreenState extends ConsumerState<LoginScreen> with SingleTickerProv
 
   Future<void> _handleLogin() async {
     if (_isSubmitting || !_formKey.currentState!.validate()) return;
-    
     setState(() => _isSubmitting = true);
-    FocusScope.of(context).unfocus(); // Ferme le clavier
+    FocusScope.of(context).unfocus();
 
     try {
       final authNotifier = ref.read(authNotifierProvider.notifier);
       final identifier = _identifierController.text.trim();
-
       final result = await ref.read(userRepositoryProvider).login(
             identifier: identifier,
             password: _passwordController.text,
@@ -115,16 +108,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> with SingleTickerProv
       if (!mounted) return;
 
       result.fold(
-        (failure) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(failure.message),
-              backgroundColor: Colors.red.shade700,
-              behavior: SnackBarBehavior.floating,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-            ),
-          );
-        },
+        (failure) => _showErrorSnackBar(failure.message),
         (data) async {
           try {
             final userModel = UserModel.fromJson(data);
@@ -136,7 +120,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> with SingleTickerProv
               name: data['name'] ?? 'Utilisateur',
               surname: data['surname'] ?? '',
               phone: data['phone'] ?? (_isPhone(identifier) ? identifier : ''),
-              email: data['email'] ?? (_isEmail(identifier) ? identifier : null),
+              email:
+                  data['email'] ?? (_isEmail(identifier) ? identifier : null),
               isVerified: data['is_verified'] ?? false,
               role: data['role'] ?? 'client',
               createdAt: DateTime.now(),
@@ -156,29 +141,39 @@ class _LoginScreenState extends ConsumerState<LoginScreen> with SingleTickerProv
     setState(() => _isSocialLoading = true);
     try {
       final supabase = Supabase.instance.client;
-      await supabase.auth.signInWithOAuth(
-        provider,
-        redirectTo: 'io.supabase.djassa://login-callback/',
-      );
+      await supabase.auth.signInWithOAuth(provider,
+          redirectTo: 'io.supabase.djassa://login-callback/');
       final sbUser = supabase.auth.currentUser;
       if (sbUser != null && mounted) {
         final userModel = _convertSupabaseUserToModel(sbUser);
         await ref.read(authNotifierProvider.notifier).loginUser(userModel);
         if (mounted) context.go(UserRole.homeRoute(userModel));
       }
-    } on AuthException catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.message), backgroundColor: Colors.red.shade700, behavior: SnackBarBehavior.floating),
-      );
     } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: const Text('Erreur de connexion sociale'), backgroundColor: Colors.red.shade700, behavior: SnackBarBehavior.floating),
-      );
+      if (mounted) {
+        _showErrorSnackBar(
+            e is AuthException ? e.message : 'Erreur de connexion sociale');
+      }
     } finally {
       if (mounted) setState(() => _isSocialLoading = false);
     }
+  }
+
+  void _showErrorSnackBar(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          message,
+          style:
+              const TextStyle(color: Colors.white, fontWeight: FontWeight.w500),
+        ),
+        backgroundColor: Colors.red.shade800,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(3.w)),
+        // Correction ici : gauche, haut, droite, bas
+        margin: EdgeInsets.fromLTRB(5.w, 0, 5.w, 3.h),
+      ),
+    );
   }
 
   @override
@@ -186,35 +181,25 @@ class _LoginScreenState extends ConsumerState<LoginScreen> with SingleTickerProv
     final isLoading = _isSubmitting || _isSocialLoading;
 
     return Scaffold(
-      backgroundColor: const Color(0xFF121212),
-      resizeToAvoidBottomInset: true, // Important pour le clavier
+      backgroundColor: const Color(0xFF0A0A0A), // Noir plus profond et élégant
+      resizeToAvoidBottomInset: true,
       body: SafeArea(
         child: Stack(
           children: [
-            // Fond Dégradé Animé Subtil
-            Container(
-              decoration: const BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [Color(0xFF1E1E1E), Color(0xFF121212)],
-                ),
-              ),
-            ),
-            
-            // Cercles décoratifs flous
+            // 1. Fond avec orbes lumineuses très subtiles (Ambiance)
             Positioned(
-              top: -10.h, right: -15.w,
-              child: BlurHashCircle(color: DjassaTheme.accentOrange, size: 50.w),
-            ),
+                top: -10.h,
+                right: -20.w,
+                child:
+                    _GlowingOrb(color: DjassaTheme.accentOrange, size: 60.w)),
             Positioned(
-              bottom: -10.h, left: -15.w,
-              child: BlurHashCircle(color: Colors.blue.shade900, size: 40.w),
-            ),
+                bottom: -10.h,
+                left: -20.w,
+                child: _GlowingOrb(color: Colors.blue.shade800, size: 50.w)),
 
             Center(
               child: SingleChildScrollView(
-                padding: EdgeInsets.symmetric(horizontal: 6.w, vertical: 2.h),
+                padding: EdgeInsets.symmetric(horizontal: 7.w, vertical: 3.h),
                 child: FadeTransition(
                   opacity: _fadeAnimation,
                   child: SlideTransition(
@@ -222,204 +207,247 @@ class _LoginScreenState extends ConsumerState<LoginScreen> with SingleTickerProv
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        // Logo avec ombre portée colorée
-                        TweenAnimationBuilder<double>(
-                          tween: Tween(begin: 0.0, end: 1.0),
-                          duration: const Duration(milliseconds: 600),
-                          builder: (_, value, child) {
-                            return Transform.scale(
-                              scale: 0.8 + (0.2 * value),
-                              child: Container(
-                                padding: EdgeInsets.symmetric(horizontal: 8.w, vertical: 1.5.h),
-                                decoration: BoxDecoration(
-                                  color: Colors.white, 
-                                  borderRadius: BorderRadius.circular(3.w),
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: DjassaTheme.accentOrange.withOpacity(0.3 * value), 
-                                      blurRadius: 20 * value, 
-                                      offset: Offset(0, 6 * value)
-                                    )
-                                  ],
-                                ),
-                                child: Image.asset(AppConstants.logoAsset, height: 7.h, fit: BoxFit.contain),
-                              ),
-                            );
-                          },
-                        ),
-                        
-                        SizedBox(height: 1.5.h),
-                        
+                        // 2. Logo épuré avec lueur subtile
+
+                        SizedBox(height: 2.5.h),
+
                         Text(
-                          "Achetez. Vendez. Partout\nen Côte d'Ivoire.",
+                          "Achetez. Vendez.\nPartout en Côte d'Ivoire.",
                           textAlign: TextAlign.center,
                           style: TextStyle(
-                            color: Colors.white.withOpacity(0.85), 
-                            fontWeight: FontWeight.w600, 
-                            fontSize: 3.5.w, 
-                            height: 1.3
+                            color: Colors.white,
+                            fontWeight: FontWeight.w300,
+                            fontSize: 5.w,
+                            height: 1.4,
+                            letterSpacing: 0.5,
                           ),
                         ),
-                        
+
+                        SizedBox(height: 4.h),
+
+                        // 3. Carte de Formulaire "Glassmorphism" sombre
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(5.w),
+                          child: BackdropFilter(
+                            filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                            child: Container(
+                              padding: EdgeInsets.all(6.w),
+                              decoration: BoxDecoration(
+                                color: Colors.white
+                                    .withOpacity(0.03), // Très subtil
+                                borderRadius: BorderRadius.circular(5.w),
+                                border: Border.all(
+                                    color: Colors.white.withOpacity(0.08)),
+                              ),
+                              child: Form(
+                                key: _formKey,
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.stretch,
+                                  children: [
+                                    Text('Connexion',
+                                        style: TextStyle(
+                                            color: Colors.white,
+                                            fontSize: 6.5.w,
+                                            fontWeight: FontWeight.w700)),
+                                    SizedBox(height: 0.5.h),
+                                    Text('Heureux de vous revoir parmi nous.',
+                                        style: TextStyle(
+                                            color: Colors.white54,
+                                            fontSize: 3.2.w)),
+                                    SizedBox(height: 3.h),
+
+                                    _CleanTextField(
+                                      controller: _identifierController,
+                                      label: 'Email ou téléphone',
+                                      icon: Icons.person_outline_rounded,
+                                      hint: '+225 07 12 34 56 78',
+                                      keyboardType: TextInputType.emailAddress,
+                                      enabled: !isLoading,
+                                      validator: (value) {
+                                        if (value == null ||
+                                            value.trim().isEmpty) {
+                                          return 'Ce champ est requis';
+                                        }
+                                        final v = value.trim();
+                                        if (!_isEmail(v) && !_isPhone(v)) {
+                                          return 'Format invalide';
+                                        }
+                                        return null;
+                                      },
+                                    ),
+
+                                    SizedBox(height: 2.h),
+
+                                    _CleanTextField(
+                                      controller: _passwordController,
+                                      label: 'Mot de passe',
+                                      icon: Icons.lock_outline_rounded,
+                                      obscureText: _obscurePassword,
+                                      enabled: !isLoading,
+                                      suffixIcon: IconButton(
+                                        icon: Icon(
+                                            _obscurePassword
+                                                ? Icons.visibility_outlined
+                                                : Icons.visibility_off_outlined,
+                                            size: 5.w,
+                                            color: Colors.white54),
+                                        onPressed: isLoading
+                                            ? null
+                                            : () => setState(() =>
+                                                _obscurePassword =
+                                                    !_obscurePassword),
+                                      ),
+                                      validator: (value) {
+                                        if (value == null || value.isEmpty) {
+                                          return 'Ce champ est requis';
+                                        }
+                                        if (value.length < 6) {
+                                          return 'Minimum 6 caractères';
+                                        }
+                                        return null;
+                                      },
+                                    ),
+
+                                    SizedBox(height: 1.h),
+
+                                    Align(
+                                      alignment: Alignment.centerRight,
+                                      child: TextButton(
+                                        onPressed: isLoading
+                                            ? null
+                                            : () => context.toForgotPassword(),
+                                        child: Text('Mot de passe oublié ?',
+                                            style: TextStyle(
+                                                color: DjassaTheme.accentOrange,
+                                                fontWeight: FontWeight.w600,
+                                                fontSize: 3.2.w)),
+                                      ),
+                                    ),
+
+                                    SizedBox(height: 2.h),
+
+                                    // Bouton Principal avec effet de lueur au hover/focus
+                                    AnimatedContainer(
+                                      duration: DjassaMotion.fast,
+                                      curve: DjassaMotion.emphasized,
+                                      decoration: BoxDecoration(
+                                        borderRadius:
+                                            BorderRadius.circular(3.w),
+                                        boxShadow: !isLoading
+                                            ? [
+                                                BoxShadow(
+                                                    color: DjassaTheme
+                                                        .accentOrange
+                                                        .withOpacity(0.3),
+                                                    blurRadius: 15,
+                                                    offset: const Offset(0, 5))
+                                              ]
+                                            : [],
+                                      ),
+                                      child: FilledButton(
+                                        style: FilledButton.styleFrom(
+                                          backgroundColor:
+                                              DjassaTheme.accentOrange,
+                                          foregroundColor: Colors.white,
+                                          padding: EdgeInsets.symmetric(
+                                              vertical: 1.8.h),
+                                          shape: RoundedRectangleBorder(
+                                              borderRadius:
+                                                  BorderRadius.circular(3.w)),
+                                        ),
+                                        onPressed:
+                                            isLoading ? null : _handleLogin,
+                                        child: isLoading
+                                            ? const SizedBox(
+                                                width: 24,
+                                                height: 24,
+                                                child:
+                                                    CircularProgressIndicator(
+                                                        color: Colors.white,
+                                                        strokeWidth: 2.5))
+                                            : Text('Se connecter',
+                                                style: TextStyle(
+                                                    fontSize: 4.2.w,
+                                                    fontWeight: FontWeight.w700,
+                                                    letterSpacing: 0.5)),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+
                         SizedBox(height: 3.h),
-                        
-                        // Carte de Formulaire
-                        Container(
-                          width: double.infinity, 
-                          padding: EdgeInsets.all(5.w),
-                          decoration: BoxDecoration(
-                            color: Colors.white, 
-                            borderRadius: BorderRadius.circular(4.w),
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withOpacity(0.2), 
-                                blurRadius: 25, 
-                                offset: const Offset(0, 10)
-                              )
-                            ],
-                          ),
-                          child: Form(
-                            key: _formKey,
-                            child: Column(
-                              mainAxisSize: MainAxisSize.min,
-                              crossAxisAlignment: CrossAxisAlignment.stretch,
-                              children: [
-                                Text(
-                                  'Connexion', 
-                                  style: TextStyle(
-                                    color: Colors.black87, 
-                                    fontSize: 6.w, 
-                                    fontWeight: FontWeight.w900
-                                  )
-                                ),
-                                SizedBox(height: 2.h),
-                                
-                                _AnimatedTextField(
-                                  controller: _identifierController,
-                                  label: 'Email ou téléphone',
-                                  icon: Icons.alternate_email_rounded,
-                                  hint: '+225 07 12 34 56 78',
-                                  keyboardType: TextInputType.emailAddress,
-                                  enabled: !isLoading,
-                                  validator: (value) {
-                                    if (value == null || value.trim().isEmpty) return 'Entrez votre email ou téléphone';
-                                    final v = value.trim();
-                                    if (!_isEmail(v) && !_isPhone(v)) return 'Format invalide';
-                                    return null;
-                                  },
-                                ),
-                                
-                                SizedBox(height: 2.h),
-                                
-                                _AnimatedTextField(
-                                  controller: _passwordController,
-                                  label: 'Mot de passe',
-                                  icon: Icons.lock_outline_rounded,
-                                  obscureText: _obscurePassword,
-                                  enabled: !isLoading,
-                                  suffixIcon: IconButton(
-                                    icon: Icon(_obscurePassword ? Icons.visibility_outlined : Icons.visibility_off_outlined, size: 5.w, color: Colors.grey),
-                                    onPressed: isLoading ? null : () => setState(() => _obscurePassword = !_obscurePassword),
-                                  ),
-                                  validator: (value) {
-                                    if (value == null || value.isEmpty) return 'Entrez votre mot de passe';
-                                    if (value.length < 6) return 'Minimum 6 caractères';
-                                    return null;
-                                  },
-                                ),
-                                
-                                SizedBox(height: 1.h),
-                                
-                                Align(
-                                  alignment: Alignment.centerRight,
-                                  child: TextButton(
-                                   onPressed: isLoading ? null : () => context.toForgotPassword(),
-                                    child: Text(
-                                      'Mot de passe oublié ?', 
-                                      style: TextStyle(
-                                        color: DjassaTheme.accentOrange, 
-                                        fontWeight: FontWeight.w700, 
-                                        fontSize: 3.2.w
-                                      )
-                                    ),
-                                  ),
-                                ),
-                                
-                                SizedBox(height: 1.h),
-                                
-                                // Bouton Connexion Animé
-                                AnimatedContainer(
-                                  duration: const Duration(milliseconds: 300),
-                                  decoration: BoxDecoration(
-                                    borderRadius: BorderRadius.circular(2.5.w),
-                                    boxShadow: isLoading 
-                                      ? [] 
-                                      : [BoxShadow(color: DjassaTheme.accentOrange.withOpacity(0.4), blurRadius: 10, offset: const Offset(0, 4))],
-                                  ),
-                                  child: FilledButton(
-                                    style: FilledButton.styleFrom(
-                                      backgroundColor: DjassaTheme.accentOrange, 
-                                      foregroundColor: Colors.white,
-                                      padding: EdgeInsets.symmetric(vertical: 1.5.h),
-                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(2.5.w)),
-                                    ),
-                                    onPressed: isLoading ? null : _handleLogin,
-                                    child: isLoading
-                                        ? SizedBox(width: 5.w, height: 5.w, child: const CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                                        : Text('Se connecter', style: TextStyle(fontSize: 4.2.w, fontWeight: FontWeight.w800)),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                        
-                        SizedBox(height: 2.5.h),
-                        
-                        // Séparateur
+
+                        // Séparateur élégant
                         Row(
                           children: [
-                            Expanded(child: Divider(color: Colors.white.withOpacity(0.2), thickness: 1)),
-                            Padding(padding: EdgeInsets.symmetric(horizontal: 3.w), child: Text('ou continuer avec', style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 3.2.w))),
-                            Expanded(child: Divider(color: Colors.white.withOpacity(0.2), thickness: 1)),
+                            Expanded(
+                                child: Divider(
+                                    color: Colors.white.withOpacity(0.1),
+                                    thickness: 1)),
+                            Padding(
+                                padding: EdgeInsets.symmetric(horizontal: 4.w),
+                                child: Text('ou',
+                                    style: TextStyle(
+                                        color: Colors.white54,
+                                        fontSize: 3.2.w,
+                                        fontWeight: FontWeight.w500))),
+                            Expanded(
+                                child: Divider(
+                                    color: Colors.white.withOpacity(0.1),
+                                    thickness: 1)),
                           ],
                         ),
-                        
-                        SizedBox(height: 2.h),
-                        
+
+                        SizedBox(height: 2.5.h),
+
                         // Boutons Sociaux
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            _SocialButton(
-                              icon: Icons.g_mobiledata_rounded,
-                              label: 'Google',
-                              isLoading: _isSocialLoading,
-                              onPressed: () => _handleSocialSignIn(OAuthProvider.google),
-                            ),
-                            SizedBox(width: 4.w),
-                            _SocialButton(
-                              icon: Icons.apple_rounded,
-                              label: 'Apple',
-                              isLoading: _isSocialLoading,
-                              onPressed: () => _handleSocialSignIn(OAuthProvider.apple),
-                            ),
-                          ],
-                        ),
-                        
-                        SizedBox(height: 2.5.h),
-                        
                         Row(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            Text('Pas de compte ?', style: TextStyle(color: Colors.white.withOpacity(0.7), fontSize: 3.5.w)),
-                            TextButton(
-                              onPressed: isLoading ? null : () => context.toRegister(),
-                              child: Text('Créer un compte', style: TextStyle(color: DjassaTheme.accentOrange, fontWeight: FontWeight.w800, fontSize: 3.5.w)),
+                            _SocialPillButton(
+                              // Remplace par FontAwesomeIcons.google si tu ajoutes le package font_awesome_flutter
+                              icon: Icons.g_translate,
+                              label: 'Google',
+                              isLoading: _isSocialLoading,
+                              onPressed: () =>
+                                  _handleSocialSignIn(OAuthProvider.google),
+                            ),
+                            SizedBox(width: 4.w),
+                            _SocialPillButton(
+                              icon: Icons.apple_rounded,
+                              label: 'Apple',
+                              isLoading: _isSocialLoading,
+                              onPressed: () =>
+                                  _handleSocialSignIn(OAuthProvider.apple),
                             ),
                           ],
                         ),
-                        SizedBox(height: 2.h), // Espace pour le clavier
+
+                        SizedBox(height: 4.h), // Espace pour le clavier
+
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Text('Pas encore de compte ?',
+                                style: TextStyle(
+                                    color: Colors.white60, fontSize: 3.5.w)),
+                            TextButton(
+                              onPressed:
+                                  isLoading ? null : () => context.toRegister(),
+                              child: Text('S\'inscrire',
+                                  style: TextStyle(
+                                      color: DjassaTheme.accentOrange,
+                                      fontWeight: FontWeight.w700,
+                                      fontSize: 3.5.w)),
+                            ),
+                          ],
+                        ),
                       ],
                     ),
                   ),
@@ -434,10 +462,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> with SingleTickerProv
 }
 
 // ─────────────────────────────────────────────────────────────────────────
-// WIDGETS UI AUXILIAIRES
+// WIDGETS UI AUXILIAIRES REDESIGNÉS
 // ─────────────────────────────────────────────────────────────────────────
 
-class _AnimatedTextField extends StatelessWidget {
+class _CleanTextField extends StatelessWidget {
   final TextEditingController controller;
   final String label;
   final IconData icon;
@@ -448,7 +476,7 @@ class _AnimatedTextField extends StatelessWidget {
   final bool enabled;
   final String? Function(String?)? validator;
 
-  const _AnimatedTextField({
+  const _CleanTextField({
     required this.controller,
     required this.label,
     required this.icon,
@@ -467,23 +495,38 @@ class _AnimatedTextField extends StatelessWidget {
       obscureText: obscureText,
       keyboardType: keyboardType,
       enabled: enabled,
-      style: TextStyle(fontWeight: FontWeight.w600, fontSize: 3.5.w, color: Colors.black87),
+      style: TextStyle(
+          fontWeight: FontWeight.w500, fontSize: 3.8.w, color: Colors.white),
       decoration: InputDecoration(
         labelText: label,
         hintText: hint,
-        prefixIcon: Icon(icon, size: 5.w, color: Colors.grey.shade600),
+        hintStyle: TextStyle(color: Colors.white38, fontSize: 3.5.w),
+        prefixIcon: Icon(icon, size: 5.w, color: Colors.white54),
         suffixIcon: suffixIcon,
-        filled: true, 
-        fillColor: const Color(0xFFF5F5F7),
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(2.5.w), borderSide: BorderSide.none),
-        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(2.5.w), borderSide: BorderSide.none),
+        filled: true,
+        fillColor: Colors.white.withOpacity(0.05), // Fond très léger
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(3.w),
+          borderSide:
+              BorderSide(color: Colors.white.withOpacity(0.1), width: 1),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(3.w),
+          borderSide:
+              BorderSide(color: Colors.white.withOpacity(0.1), width: 1),
+        ),
         focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(2.5.w), 
-          borderSide: const BorderSide(color: DjassaTheme.accentOrange, width: 2)
+          borderRadius: BorderRadius.circular(3.w),
+          borderSide:
+              const BorderSide(color: DjassaTheme.accentOrange, width: 1.5),
         ),
         errorBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(2.5.w), 
-          borderSide: BorderSide(color: Colors.red.shade300, width: 1)
+          borderRadius: BorderRadius.circular(3.w),
+          borderSide: BorderSide(color: Colors.red.shade400, width: 1),
+        ),
+        focusedErrorBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(3.w),
+          borderSide: BorderSide(color: Colors.red.shade400, width: 1.5),
         ),
         contentPadding: EdgeInsets.symmetric(horizontal: 4.w, vertical: 1.8.h),
       ),
@@ -492,45 +535,50 @@ class _AnimatedTextField extends StatelessWidget {
   }
 }
 
-class _SocialButton extends StatelessWidget {
+class _SocialPillButton extends StatelessWidget {
   final IconData icon;
   final String label;
   final bool isLoading;
   final VoidCallback onPressed;
 
-  const _SocialButton({
-    required this.icon,
-    required this.label,
-    required this.isLoading,
-    required this.onPressed,
-  });
+  const _SocialPillButton(
+      {required this.icon,
+      required this.label,
+      required this.isLoading,
+      required this.onPressed});
 
   @override
   Widget build(BuildContext context) {
     return Expanded(
       child: OutlinedButton.icon(
         style: OutlinedButton.styleFrom(
-          side: BorderSide(color: Colors.white.withOpacity(0.2), width: 1.5),
-          foregroundColor: Colors.white, 
-          backgroundColor: Colors.white.withOpacity(0.05),
+          side: BorderSide(color: Colors.white.withOpacity(0.15), width: 1),
+          foregroundColor: Colors.white,
+          backgroundColor: Colors.white.withOpacity(0.03),
           padding: EdgeInsets.symmetric(vertical: 1.5.h),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(2.5.w)),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(3.w)),
         ),
         onPressed: isLoading ? null : onPressed,
         icon: isLoading
-            ? SizedBox(width: 4.w, height: 4.w, child: const CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-            : Icon(icon, size: 5.5.w),
-        label: Flexible(child: Text(label, style: TextStyle(fontSize: 3.5.w, fontWeight: FontWeight.w600), overflow: TextOverflow.ellipsis)),
+            ? const SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(
+                    color: Colors.white, strokeWidth: 2))
+            : Icon(icon, size: 5.w),
+        label: Text(label,
+            style: TextStyle(fontSize: 3.5.w, fontWeight: FontWeight.w600)),
       ),
     );
   }
 }
 
-class BlurHashCircle extends StatelessWidget {
+class _GlowingOrb extends StatelessWidget {
   final Color color;
   final double size;
 
-  const BlurHashCircle({required this.color, required this.size});
+  const _GlowingOrb({required this.color, required this.size});
 
   @override
   Widget build(BuildContext context) {
@@ -540,8 +588,12 @@ class BlurHashCircle extends StatelessWidget {
       decoration: BoxDecoration(
         shape: BoxShape.circle,
         gradient: RadialGradient(
-          colors: [color.withOpacity(0.15), Colors.transparent],
-          stops: const [0.4, 1.0],
+          colors: [
+            color.withOpacity(0.15),
+            color.withOpacity(0.05),
+            Colors.transparent
+          ],
+          stops: const [0.2, 0.5, 1.0],
         ),
       ),
     );

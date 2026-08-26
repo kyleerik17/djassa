@@ -67,8 +67,8 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
     setState(() => _currentStep = step);
     _pageController.animateToPage(
       step,
-      duration: const Duration(milliseconds: 280),
-      curve: Curves.easeOutCubic,
+      duration: DjassaMotion.normal,
+      curve: DjassaMotion.emphasized,
     );
   }
 
@@ -178,7 +178,6 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
               ),
             );
 
-
             context.go(UserRole.homeRoute(user));
           } catch (e) {
             if (!mounted) return;
@@ -228,8 +227,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
               child: PageView(
                 controller: _pageController,
                 physics: const NeverScrollableScrollPhysics(),
-                onPageChanged: (index) =>
-                    setState(() => _currentStep = index),
+                onPageChanged: (index) => setState(() => _currentStep = index),
                 children: [
                   _Step1PersonalInfo(
                     formKey: _step1FormKey,
@@ -253,8 +251,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                       () => _obscurePassword = !_obscurePassword,
                     ),
                     onToggleConfirmPassword: () => setState(
-                      () => _obscureConfirmPassword =
-                          !_obscureConfirmPassword,
+                      () => _obscureConfirmPassword = !_obscureConfirmPassword,
                     ),
                     acceptTerms: _acceptTerms,
                     onAcceptTermsChanged: (value) =>
@@ -330,7 +327,8 @@ class _StepProgressBar extends StatelessWidget {
                     right: index == stepCount - 1 ? 0 : 8,
                   ),
                   child: AnimatedContainer(
-                    duration: const Duration(milliseconds: 250),
+                    duration: DjassaMotion.fast,
+                    curve: DjassaMotion.emphasized,
                     height: 5,
                     decoration: BoxDecoration(
                       color: isActive
@@ -498,7 +496,6 @@ class _Step2ProfileType extends StatelessWidget {
             style: Theme.of(context).textTheme.bodyMedium,
           ),
           const SizedBox(height: 28),
-
           _RoleCard(
             icon: Icons.person_outline_rounded,
             title: 'Client',
@@ -549,7 +546,8 @@ class _RoleCard extends StatelessWidget {
       borderRadius: BorderRadius.circular(20),
       onTap: onTap,
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 160),
+        duration: DjassaMotion.fast,
+        curve: DjassaMotion.emphasized,
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
           color: selected
@@ -557,9 +555,8 @@ class _RoleCard extends StatelessWidget {
               : DjassaTheme.primaryWhite,
           borderRadius: BorderRadius.circular(20),
           border: Border.all(
-            color: selected
-                ? DjassaTheme.accentOrange
-                : DjassaTheme.borderMedium,
+            color:
+                selected ? DjassaTheme.accentOrange : DjassaTheme.borderMedium,
             width: selected ? 2 : 1,
           ),
         ),
@@ -596,9 +593,7 @@ class _RoleCard extends StatelessWidget {
               ),
             ),
             Icon(
-              selected
-                  ? Icons.check_circle_rounded
-                  : Icons.circle_outlined,
+              selected ? Icons.check_circle_rounded : Icons.circle_outlined,
               color: selected
                   ? DjassaTheme.accentOrange
                   : DjassaTheme.borderMedium,

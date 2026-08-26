@@ -9,8 +9,18 @@ import '../../providers/core_providers.dart';
 
 String formatDeliveryDate(DateTime value) {
   const months = [
-    'janvier', 'février', 'mars', 'avril', 'mai', 'juin',
-    'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre',
+    'janvier',
+    'février',
+    'mars',
+    'avril',
+    'mai',
+    'juin',
+    'juillet',
+    'août',
+    'septembre',
+    'octobre',
+    'novembre',
+    'décembre',
   ];
   final month = months[value.month - 1];
   return '${value.day} $month ${value.year} à '
@@ -29,7 +39,7 @@ Future<void> showDeliveryStageDialog(
     barrierDismissible: true,
     barrierLabel: 'Fermer',
     barrierColor: Colors.black.withValues(alpha: .46),
-    transitionDuration: const Duration(milliseconds: 380),
+    transitionDuration: DjassaMotion.normal,
     pageBuilder: (context, _, __) => Center(
       child: Material(
         color: Colors.transparent,
@@ -87,13 +97,13 @@ Future<void> showDeliveryStageDialog(
     transitionBuilder: (context, animation, _, child) {
       final curved = CurvedAnimation(
         parent: animation,
-        curve: Curves.easeOutBack,
-        reverseCurve: Curves.easeInCubic,
+        curve: DjassaMotion.emphasized,
+        reverseCurve: DjassaMotion.exit,
       );
       return FadeTransition(
         opacity: animation,
         child: ScaleTransition(
-          scale: Tween<double>(begin: .88, end: 1).animate(curved),
+          scale: Tween<double>(begin: .94, end: 1).animate(curved),
           child: child,
         ),
       );
@@ -226,7 +236,10 @@ class DeliveryTrackingCard extends StatelessWidget {
           ],
         ),
       ),
-    ).animate().fadeIn(duration: 360.ms).slideY(begin: .08, end: 0);
+    )
+        .animate()
+        .fadeIn(duration: DjassaMotion.normal)
+        .slideY(begin: .04, end: 0, curve: DjassaMotion.emphasized);
   }
 }
 
@@ -267,7 +280,8 @@ class _RealtimeDeliveryMapState extends State<RealtimeDeliveryMap>
     _mapController = MapController();
 
     const distanceCalculator = Distance();
-    _totalDistance = distanceCalculator.as(LengthUnit.Meter, _startPoint, _endPoint);
+    _totalDistance =
+        distanceCalculator.as(LengthUnit.Meter, _startPoint, _endPoint);
 
     if (_totalDistance < 10) {
       _totalDistance = 500;
@@ -326,8 +340,10 @@ class _RealtimeDeliveryMapState extends State<RealtimeDeliveryMap>
 
   LatLng _getCurrentCourierPosition() {
     final progress = _controller.value;
-    final lat = _startPoint.latitude + (_endPoint.latitude - _startPoint.latitude) * progress;
-    final lon = _startPoint.longitude + (_endPoint.longitude - _startPoint.longitude) * progress;
+    final lat = _startPoint.latitude +
+        (_endPoint.latitude - _startPoint.latitude) * progress;
+    final lon = _startPoint.longitude +
+        (_endPoint.longitude - _startPoint.longitude) * progress;
     return LatLng(lat, lon);
   }
 
@@ -358,7 +374,8 @@ class _RealtimeDeliveryMapState extends State<RealtimeDeliveryMap>
               minZoom: 10,
               maxZoom: 18,
               interactionOptions: const InteractionOptions(
-                flags: InteractiveFlag.all, // Tous les gestes activés : pinch zoom, drag, double tap, etc.
+                flags: InteractiveFlag
+                    .all, // Tous les gestes activés : pinch zoom, drag, double tap, etc.
               ),
             ),
             children: [
@@ -405,7 +422,8 @@ class _RealtimeDeliveryMapState extends State<RealtimeDeliveryMap>
                 left: 12,
                 top: 12,
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
                   decoration: BoxDecoration(
                     color: DjassaTheme.primaryWhite.withValues(alpha: .92),
                     borderRadius: BorderRadius.circular(999),
@@ -414,12 +432,14 @@ class _RealtimeDeliveryMapState extends State<RealtimeDeliveryMap>
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Icon(Icons.map_rounded, size: 14, color: DjassaTheme.accentOrange),
+                      const Icon(Icons.map_rounded,
+                          size: 14, color: DjassaTheme.accentOrange),
                       const SizedBox(width: 5),
                       Text(
                         'OpenStreetMap',
                         style: TextStyle(
-                          color: DjassaTheme.primaryBlack.withValues(alpha: .72),
+                          color:
+                              DjassaTheme.primaryBlack.withValues(alpha: .72),
                           fontSize: 11,
                           fontWeight: FontWeight.w800,
                         ),
@@ -429,11 +449,13 @@ class _RealtimeDeliveryMapState extends State<RealtimeDeliveryMap>
                 ),
               ),
               const RichAttributionWidget(
-                attributions: [TextSourceAttribution('OpenStreetMap contributors')],
+                attributions: [
+                  TextSourceAttribution('OpenStreetMap contributors')
+                ],
               ),
             ],
           ),
-          
+
           // Overlay de statistiques en temps réel
           Positioned(
             left: 12,
@@ -451,7 +473,8 @@ class _RealtimeDeliveryMapState extends State<RealtimeDeliveryMap>
                   ? const Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Icon(Icons.verified_rounded, color: Colors.green, size: 20),
+                        Icon(Icons.verified_rounded,
+                            color: Colors.green, size: 20),
                         SizedBox(width: 8),
                         Text(
                           'Livreur arrivé — Livraison en cours',
@@ -559,11 +582,13 @@ class _MapMarker extends StatelessWidget {
       children: [
         pulse
             ? iconWidget
-                .animate(onPlay: (controller) => controller.repeat(reverse: true))
+                .animate(
+                    onPlay: (controller) => controller.repeat(reverse: true))
                 .scale(
                   begin: const Offset(.92, .92),
-                  end: const Offset(1.08, 1.08),
-                  duration: 850.ms,
+                  end: const Offset(1.045, 1.045),
+                  duration: 1200.ms,
+                  curve: DjassaMotion.soft,
                 )
             : iconWidget,
         const SizedBox(height: 4),
@@ -783,10 +808,10 @@ class _AnimatedStageIcon extends StatelessWidget {
       ),
       child: Icon(icon, color: color, size: 38),
     ).animate(onPlay: (controller) => controller.repeat(reverse: true)).scale(
-          begin: const Offset(.92, .92),
-          end: const Offset(1.05, 1.05),
-          duration: 780.ms,
-          curve: Curves.easeInOut,
+          begin: const Offset(.96, .96),
+          end: const Offset(1.035, 1.035),
+          duration: 1150.ms,
+          curve: DjassaMotion.soft,
         );
   }
 }
@@ -806,7 +831,8 @@ class _DialogTimeline extends StatelessWidget {
         final isDone = index <= currentIndex;
         return Expanded(
           child: AnimatedContainer(
-            duration: const Duration(milliseconds: 260),
+            duration: DjassaMotion.fast,
+            curve: DjassaMotion.emphasized,
             height: 8,
             margin: EdgeInsets.only(right: index == stages.length - 1 ? 0 : 6),
             decoration: BoxDecoration(

@@ -1,5 +1,19 @@
 import 'package:flutter/material.dart';
 
+class DjassaMotion {
+  static const Duration micro = Duration(milliseconds: 160);
+  static const Duration fast = Duration(milliseconds: 220);
+  static const Duration normal = Duration(milliseconds: 360);
+  static const Duration slow = Duration(milliseconds: 520);
+  static const Duration routeForward = Duration(milliseconds: 380);
+  static const Duration routeReverse = Duration(milliseconds: 280);
+
+  static const Curve emphasized = Curves.easeOutQuart;
+  static const Curve entrance = Curves.easeOutCubic;
+  static const Curve exit = Curves.easeInCubic;
+  static const Curve soft = Curves.easeInOutCubic;
+}
+
 /// Thème premium pour l'application Djassa
 /// Couleurs principales : Noir élégant, Blanc pur, Orange accent
 class DjassaTheme {
