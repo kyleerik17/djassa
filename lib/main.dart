@@ -157,8 +157,6 @@ class _DjassaAppState extends ConsumerState<DjassaApp> {
           debugShowCheckedModeBanner: false,
           theme: DjassaTheme.lightTheme,
           darkTheme: DjassaTheme.darkTheme,
-          // Explicitement en light pour l'instant (dark mode pas encore validé UX).
-          // Passer à ThemeMode.system quand darkTheme sera prêt en prod.
           themeMode: ThemeMode.light,
           locale: const Locale('fr', 'CI'),
           supportedLocales: const [
